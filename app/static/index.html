@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conversation Sparring</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #222; }
+  h1 { font-size: 1.4rem; }
+  #score-line { font-weight: bold; margin: 0.5rem 0; }
+  #transcript { border: 1px solid #ccc; border-radius: 6px; padding: 1rem; min-height: 200px; margin-bottom: 1rem; }
+  .msg { margin-bottom: 0.75rem; }
+  .msg .who { font-weight: bold; }
+  .msg.user .who { color: #1a5276; }
+  .msg.character .who { color: #6c3483; }
+  #composer { display: flex; gap: 0.5rem; }
+  #question { flex: 1; padding: 0.5rem; font-size: 1rem; }
+  button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
+  #revealed { margin-top: 0.25rem; }
+  #revealed li { margin-bottom: 0.25rem; }
+</style>
+</head>
+<body>
+<h1>Conversation Sparring</h1>
+<p>Ask questions. Open questions go deeper than yes/no ones — try asking
+about feelings, worries, and what matters, not just facts.</p>
+<div id="score-line">Score: <span id="score">0/7</span></div>
+<div id="transcript" aria-live="polite"></div>
+<div id="composer">
+  <input id="question" type="text" placeholder="Ask your teammate a question…" autocomplete="off">
+  <button id="send" type="button">Send</button>
+  <button id="new-session" type="button">New session</button>
+</div>
+<h2>Revealed</h2>
+<ul id="revealed"></ul>
+
+<script>
+let sessionId = null;
+
+const transcriptEl = document.getElementById('transcript');
+const scoreEl = document.getElementById('score');
+const revealedEl = document.getElementById('revealed');
+const inputEl = document.getElementById('question');
+
+function addMessage(who, text) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + (who === 'You' ? 'user' : 'character');
+  const whoSpan = document.createElement('span');
+  whoSpan.className = 'who';
+  whoSpan.textContent = who + ': ';
+  div.appendChild(whoSpan);
+  div.appendChild(document.createTextNode(text));
+  transcriptEl.appendChild(div);
+}
+
+function renderRevealed(titles) {
+  revealedEl.innerHTML = '';
+  titles.forEach(function (title) {
+    const li = document.createElement('li');
+    li.textContent = title;
+    revealedEl.appendChild(li);
+  });
+}
+
+async function createSession() {
+  const res = await fetch('/sessions', { method: 'POST' });
+  const data = await res.json();
+  sessionId = data.id;
+  transcriptEl.innerHTML = '';
+  scoreEl.textContent = data.score.revealed + '/' + data.score.total;
+  renderRevealed(data.revealed_titles);
+  addMessage(data.character.name, data.character.opening_line);
+  inputEl.focus();
+}
+
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text || !sessionId) return;
+  inputEl.value = '';
+  addMessage('You', text);
+  const res = await fetch('/sessions/' + sessionId + '/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: text })
+  });
+  if (!res.ok) {
+    addMessage('System', 'Something went wrong (' + res.status + '). Try a new session.');
+    return;
+  }
+  const data = await res.json();
+  addMessage('Teammate', data.reply);
+  scoreEl.textContent = data.score_display;
+  // Refresh revealed titles from the server (graph order, titles only).
+  const state = await (await fetch('/sessions/' + sessionId)).json();
+  renderRevealed(state.revealed_titles);
+}
+
+document.getElementById('send').addEventListener('click', sendMessage);
+document.getElementById('new-session').addEventListener('click', createSession);
+inputEl.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') sendMessage();
+});
+
+// On load, create a session automatically.
+createSession();
+</script>
+</body>
+</html>
