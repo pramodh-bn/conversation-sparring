@@ -125,3 +125,60 @@ def test_index_contains_labeled_portrait_slot():
     assert 'id="portrait-panel"' in html
     assert 'id="portrait"' in html
     assert "not a live" in html
+
+
+def test_portrait_accepts_branch_id():
+    # Mirrors the CS-15 browser repro (CS-C47): main stalls at 2/7,
+    # branch B advances to 5/7, then the UI switches back to main.
+    # The portrait endpoint must serve the requested branch, not just
+    # the server-side active one.
+    session_id = client.post("/sessions", json={}).json()["id"]
+    for question in [
+        "Did you miss the deadline again?",
+        "Is the report finished yet?",
+    ]:
+        res = client.post(
+            f"/sessions/{session_id}/messages", json={"text": question}
+        )
+        assert res.status_code == 200
+    res = client.post(
+        f"/sessions/{session_id}/branches", json={"from_turn": 2}
+    )
+    assert res.status_code == 200
+    branch_id = res.json()["branch"]["id"]
+    for question in [
+        "What's on your plate right now?",
+        "What worries you most?",
+        "What matters most?",
+    ]:
+        res = client.post(
+            f"/sessions/{session_id}/messages",
+            json={"text": question, "branch_id": branch_id},
+        )
+        assert res.status_code == 200
+    scores = {
+        entry["id"]: entry["score"]
+        for entry in client.get(f"/sessions/{session_id}/branches").json()[
+            "branches"
+        ]
+    }
+    assert scores["main"] == {"revealed": 2, "total": 7}
+    assert scores[branch_id] == {"revealed": 5, "total": 7}
+    # Server-active branch is B: the default still follows it.
+    res = client.get(f"/sessions/{session_id}/portrait")
+    assert res.status_code == 200
+    assert res.json()["expression"] == "open"
+    # Explicit branch param follows the requested branch (CS-C47).
+    res = client.get(
+        f"/sessions/{session_id}/portrait", params={"branch_id": "main"}
+    )
+    assert res.status_code == 200
+    assert res.json()["expression"] == "guarded"
+
+
+def test_portrait_unknown_branch_404():
+    session_id = client.post("/sessions", json={}).json()["id"]
+    res = client.get(
+        f"/sessions/{session_id}/portrait", params={"branch_id": "nope"}
+    )
+    assert res.status_code == 404

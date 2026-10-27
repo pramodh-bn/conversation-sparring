@@ -38,7 +38,7 @@ cd ~/workspace/hackathon-conversation-sparring
 .venv/bin/python -m pytest
 ```
 
-Expected: **132 passed**. (One harmless Starlette deprecation warning
+Expected: **134 passed**. (One harmless Starlette deprecation warning
 about `httpx` in `TestClient` may appear; it is not a failure.)
 
 ## Run the scripted demo (no API key needed)
@@ -95,7 +95,9 @@ API:
   point, score, turn count per branch.
 - `GET /sessions/{id}/portrait` → portrait payload: expression
   (guarded/softening/open from score thirds), stub flag, and the
-  portrait image as a data URL. 404 for unknown sessions.
+  portrait image as a data URL. Optional `?branch_id=` scores that
+  branch instead of the server-active one. 404 for unknown sessions
+  or branches.
 
 ## Run with the live model (CS-6)
 
@@ -117,9 +119,12 @@ model); only the character's voice and the coach's whispers change.
 
 ## Portrait (CS-7, stub — not a live render)
 
-`GET /sessions/{id}/portrait` returns the character portrait for the
-active branch's score: `{"expression", "stub": true, "image"}` where
-`image` is an SVG data URL. Expression follows score thirds —
+`GET /sessions/{id}/portrait` returns the character portrait for a
+branch's score: `{"expression", "stub": true, "image"}` where `image`
+is an SVG data URL. By default it scores the server-active branch;
+`?branch_id=` scores the named branch instead (the UI passes its own
+active branch so click-to-switch re-renders the portrait too).
+Expression follows score thirds —
 0–2/7 guarded, 3–4/7 softening, 5–7/7 open — so progress shows as a
 face as well as a number. The UI shows it under the score with a
 stub caption; servers without the endpoint simply hide the panel.

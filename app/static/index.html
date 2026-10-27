@@ -190,7 +190,9 @@ function switchBranch(id) {
 async function refreshPortrait() {
   if (!sessionId) return;
   try {
-    const res = await fetch('/sessions/' + sessionId + '/portrait');
+    let portraitUrl = '/sessions/' + sessionId + '/portrait';
+    if (branchesSupported) portraitUrl += '?branch_id=' + encodeURIComponent(activeBranchId);
+    const res = await fetch(portraitUrl);
     if (!res.ok) return;
     const data = await res.json();
     portraitEl.src = data.image;

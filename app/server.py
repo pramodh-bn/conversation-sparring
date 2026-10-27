@@ -221,9 +221,15 @@ def list_branches(session_id: str):
 
 
 @app.get("/sessions/{session_id}/portrait")
-def get_portrait(session_id: str):
+def get_portrait(session_id: str, branch_id: str | None = None):
     session = _get_session(session_id)
-    return portrait_payload(session.score_count, session.score_total)
+    if branch_id is None:
+        return portrait_payload(session.score_count, session.score_total)
+    try:
+        branch = session.branches[branch_id]
+    except KeyError:
+        raise HTTPException(status_code=404, detail="unknown branch")
+    return portrait_payload(branch.score_count, session.score_total)
 
 
 @app.get("/")
