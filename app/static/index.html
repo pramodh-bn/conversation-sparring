@@ -7,6 +7,7 @@
 <style>
   body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #222; }
   h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; margin-bottom: 0.25rem; }
   #score-line { font-weight: bold; margin: 0.5rem 0; }
   #transcript { border: 1px solid #ccc; border-radius: 6px; padding: 1rem; min-height: 200px; margin-bottom: 1rem; }
   .msg { margin-bottom: 0.75rem; }
@@ -18,6 +19,15 @@
   button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
   #revealed { margin-top: 0.25rem; }
   #revealed li { margin-bottom: 0.25rem; }
+  #whisper-panel { border: 1px dashed #1a5276; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+  #whisper-panel .who { font-weight: bold; color: #1a5276; }
+  #whisper-panel button { margin-left: 0.5rem; }
+  #whisper-panel[hidden], #branch-panel[hidden] { display: none; }
+  #branch-panel { border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; margin-bottom: 1rem; }
+  #branches { list-style: none; padding-left: 0; margin: 0.25rem 0; }
+  #branches li { margin-bottom: 0.25rem; }
+  #branches button { padding: 0.25rem 0.75rem; }
+  #branches button.current { font-weight: bold; border: 2px solid #1a5276; }
 </style>
 </head>
 <body>
@@ -25,7 +35,15 @@
 <p>Ask questions. Open questions go deeper than yes/no ones — try asking
 about feelings, worries, and what matters, not just facts.</p>
 <div id="score-line">Score: <span id="score">0/7</span></div>
+<div id="branch-panel">
+  <h2>Branches</h2>
+  <ul id="branches"></ul>
+</div>
 <div id="transcript" aria-live="polite"></div>
+<div id="whisper-panel" hidden>
+  <span class="who">Coach: </span><span id="whisper-text"></span>
+  <button id="rewind" type="button">Rewind to this turn</button>
+</div>
 <div id="composer">
   <input id="question" type="text" placeholder="Ask your teammate a question…" autocomplete="off">
   <button id="send" type="button">Send</button>
@@ -35,12 +53,37 @@ about feelings, worries, and what matters, not just facts.</p>
 <ul id="revealed"></ul>
 
 <script>
+// Day 3/4 UI (CS-4): coach whisper panel + branch tree, same page.
+//
+// Branch state is cached client-side: every reply is stored per branch,
+// so switching branches re-renders instantly with no extra endpoint.
+// The server stays the source of truth for scores (GET branches) and
+// follows the UI's branch on the next POST (messages carry branch_id,
+// fork activates the new branch).
+//
+// Defensive by design (Brief 3): when coach_whisper is null the panel
+// stays hidden, and when the branch endpoints are absent (Day 1/2
+// server) the page behaves exactly like the Day 1/2 UI.
 let sessionId = null;
+let activeBranchId = "main";
+let branchCache = {};   // branch id -> [{who, text, newlyRevealed}]
+let branchTree = [];    // last GET branches result
+let branchesSupported = true;
+let pendingRewindTurn = null;
 
 const transcriptEl = document.getElementById('transcript');
 const scoreEl = document.getElementById('score');
 const revealedEl = document.getElementById('revealed');
 const inputEl = document.getElementById('question');
+const whisperPanelEl = document.getElementById('whisper-panel');
+const whisperTextEl = document.getElementById('whisper-text');
+const branchPanelEl = document.getElementById('branch-panel');
+const branchesEl = document.getElementById('branches');
+
+function activeTurns() {
+  if (!branchCache[activeBranchId]) branchCache[activeBranchId] = [];
+  return branchCache[activeBranchId];
+}
 
 function addMessage(who, text) {
   const div = document.createElement('div');
@@ -62,41 +105,198 @@ function renderRevealed(titles) {
   });
 }
 
-async function createSession() {
-  const res = await fetch('/sessions', { method: 'POST' });
-  const data = await res.json();
-  sessionId = data.id;
+function revealedTitles(branchId) {
+  const seen = [];
+  (branchCache[branchId] || []).forEach(function (turn) {
+    (turn.newlyRevealed || []).forEach(function (title) {
+      if (seen.indexOf(title) === -1) seen.push(title);
+    });
+  });
+  return seen;
+}
+
+function scoreText(branchId) {
+  for (let i = 0; i < branchTree.length; i++) {
+    if (branchTree[i].id === branchId) {
+      return branchTree[i].score.revealed + '/' + branchTree[i].score.total;
+    }
+  }
+  return scoreEl.textContent;
+}
+
+function hideWhisper() {
+  whisperPanelEl.hidden = true;
+  pendingRewindTurn = null;
+}
+
+function showWhisper(text, turnIndex) {
+  whisperTextEl.textContent = text;
+  pendingRewindTurn = turnIndex;
+  whisperPanelEl.hidden = false;
+}
+
+function renderTree() {
+  if (!branchesSupported) {
+    branchPanelEl.hidden = true;
+    return;
+  }
+  branchPanelEl.hidden = false;
+  branchesEl.innerHTML = '';
+  branchTree.forEach(function (branch) {
+    const li = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = branch.label + ' — ' + branch.score.revealed +
+      '/' + branch.score.total;
+    if (branch.id === activeBranchId) button.className = 'current';
+    button.addEventListener('click', function () {
+      switchBranch(branch.id);
+    });
+    li.appendChild(button);
+    branchesEl.appendChild(li);
+  });
+}
+
+function renderActiveBranch() {
   transcriptEl.innerHTML = '';
-  scoreEl.textContent = data.score.revealed + '/' + data.score.total;
-  renderRevealed(data.revealed_titles);
-  addMessage(data.character.name, data.character.opening_line);
-  inputEl.focus();
+  activeTurns().forEach(function (turn) {
+    addMessage(turn.who, turn.text);
+  });
+  renderRevealed(revealedTitles(activeBranchId));
+  scoreEl.textContent = scoreText(activeBranchId);
+  renderTree();
+  hideWhisper();
+}
+
+function switchBranch(id) {
+  if (!branchCache[id]) branchCache[id] = [];
+  activeBranchId = id;
+  renderActiveBranch();
+}
+
+async function refreshTree() {
+  if (!sessionId || !branchesSupported) return;
+  try {
+    const res = await fetch('/sessions/' + sessionId + '/branches');
+    if (!res.ok) throw new Error('branches unavailable');
+    const data = await res.json();
+    branchTree = data.branches || [];
+    branchTree.forEach(function (branch) {
+      if (!branchCache[branch.id]) branchCache[branch.id] = [];
+    });
+  } catch (err) {
+    branchesSupported = false;
+    branchTree = [];
+  }
+}
+
+async function createSession() {
+  try {
+    const res = await fetch('/sessions', { method: 'POST' });
+    const data = await res.json();
+    sessionId = data.id;
+    activeBranchId = 'main';
+    branchCache = { main: [] };
+    branchTree = [];
+    branchesSupported = true;
+    branchCache.main.push({
+      who: data.character.name,
+      text: data.character.opening_line,
+      newlyRevealed: []
+    });
+    scoreEl.textContent = data.score.revealed + '/' + data.score.total;
+    await refreshTree();
+    renderActiveBranch();
+    inputEl.focus();
+  } catch (err) {
+    addMessage('System', 'Could not start a session. Is the server running?');
+  }
+}
+
+function userTurnCount() {
+  return activeTurns().filter(function (turn) {
+    return turn.who === 'You';
+  }).length;
 }
 
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text || !sessionId) return;
   inputEl.value = '';
+  hideWhisper();
+  activeTurns().push({ who: 'You', text: text, newlyRevealed: [] });
   addMessage('You', text);
-  const res = await fetch('/sessions/' + sessionId + '/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: text })
-  });
-  if (!res.ok) {
-    addMessage('System', 'Something went wrong (' + res.status + '). Try a new session.');
+  const body = { text: text };
+  if (branchesSupported) body.branch_id = activeBranchId;
+  let data;
+  try {
+    const res = await fetch('/sessions/' + sessionId + '/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      addMessage('System', 'Something went wrong (' + res.status + '). Try a new session.');
+      activeTurns().pop();
+      return;
+    }
+    data = await res.json();
+  } catch (err) {
+    addMessage('System', 'Request failed. Is the server running?');
+    activeTurns().pop();
     return;
   }
-  const data = await res.json();
+  activeTurns().push({
+    who: 'Teammate',
+    text: data.reply,
+    newlyRevealed: data.newly_revealed || []
+  });
   addMessage('Teammate', data.reply);
-  scoreEl.textContent = data.score_display;
-  // Refresh revealed titles from the server (graph order, titles only).
-  const state = await (await fetch('/sessions/' + sessionId)).json();
-  renderRevealed(state.revealed_titles);
+  if (data.branch_id) activeBranchId = data.branch_id;
+  await refreshTree();
+  renderRevealed(revealedTitles(activeBranchId));
+  if (branchesSupported) {
+    scoreEl.textContent = scoreText(activeBranchId);
+  } else if (data.score_display) {
+    scoreEl.textContent = data.score_display;
+  }
+  renderTree();
+  if (data.coach_whisper) showWhisper(data.coach_whisper, userTurnCount() - 1);
+}
+
+async function rewindToTurn() {
+  if (!sessionId || pendingRewindTurn === null) return;
+  const fromTurn = pendingRewindTurn;
+  const fromBranch = activeBranchId;
+  hideWhisper();
+  let data;
+  try {
+    const res = await fetch('/sessions/' + sessionId + '/branches', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from_turn: fromTurn, from_branch_id: fromBranch })
+    });
+    if (!res.ok) {
+      addMessage('System', 'Rewind failed (' + res.status + ').');
+      return;
+    }
+    data = await res.json();
+  } catch (err) {
+    addMessage('System', 'Rewind failed. Is the server running?');
+    return;
+  }
+  // Cache layout is [opening, user, reply, user, reply, ...]: one
+  // opening line plus two entries per server turn.
+  const newId = data.branch.id;
+  branchCache[newId] = branchCache[fromBranch].slice(0, fromTurn * 2 + 1);
+  activeBranchId = newId;
+  await refreshTree();
+  renderActiveBranch();
 }
 
 document.getElementById('send').addEventListener('click', sendMessage);
 document.getElementById('new-session').addEventListener('click', createSession);
+document.getElementById('rewind').addEventListener('click', rewindToTurn);
 inputEl.addEventListener('keydown', function (e) {
   if (e.key === 'Enter') sendMessage();
 });
