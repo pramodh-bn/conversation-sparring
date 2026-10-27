@@ -28,6 +28,7 @@ from pydantic import BaseModel
 from app.character import MetaSparkClient, ScriptedCharacter
 from app.coach import RuleCoach, SparkCoach
 from app.graph import load_scenario
+from app.portrait import portrait_payload
 from app.session import Session
 
 # Scenario path resolved relative to this file's package, not the CWD:
@@ -217,6 +218,12 @@ def list_branches(session_id: str):
         "branches": session.branch_summaries(),
         "active_branch_id": session.active_branch_id,
     }
+
+
+@app.get("/sessions/{session_id}/portrait")
+def get_portrait(session_id: str):
+    session = _get_session(session_id)
+    return portrait_payload(session.score_count, session.score_total)
 
 
 @app.get("/")
