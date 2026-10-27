@@ -5,7 +5,7 @@
   meaning whisper from the fixed bank (rotation pinned); complete
   sessions stay silent; whispers never contain unrevealed node text.
 - SparkCoach: inert without a key (RuntimeError, no network); with a
-  mocked httpx.post it returns the model's whisper. No live calls.
+  mocked OpenAI client it returns the model's whisper. No live calls.
 """
 
 import sys
@@ -191,33 +191,20 @@ def test_spark_coach_silent_when_complete_without_calling_client(revealed):
     assert coach.suggest(_coach_view(revealed=revealed)) is None
 
 
-def test_spark_coach_returns_model_whisper_with_mocked_http(monkeypatch):
+def test_spark_coach_returns_model_whisper_with_mocked_client(
+    monkeypatch, fake_openai
+):
     monkeypatch.setenv("META_MODEL_API_KEY", "test-key")
     monkeypatch.setenv("META_MODEL_API_BASE", "https://model.test")
-
-    seen = {}
-
-    class FakeResponse:
-        def raise_for_status(self):
-            pass
-
-        def json(self):
-            return {"choices": [{"message": {"content": "Try asking how it felt."}}]}
-
-    def fake_post(url, json=None, headers=None, timeout=None):
-        seen["url"] = url
-        seen["json"] = json
-        return FakeResponse()
-
-    import httpx
-
-    monkeypatch.setattr(httpx, "post", fake_post)
+    fake_openai.reply = "Try asking how it felt."
     coach = SparkCoach()
     whisper = coach.suggest(_coach_view("Did you miss the deadline again?"))
     assert whisper == "Try asking how it felt."
-    assert seen["url"] == "https://model.test/chat/completions"
+    (init,) = fake_openai.clients
+    assert init["base_url"] == "https://model.test"
+    (call,) = fake_openai.calls
     # The coach prompt carries the stalled question for context.
-    assert "Did you miss the deadline again?" in str(seen["json"])
+    assert "Did you miss the deadline again?" in str(call["messages"])
 
 
 # --- Wiring: Session consults the coach (CS-2) ---
