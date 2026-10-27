@@ -40,6 +40,52 @@ agents, regardless of the tool used. Explicit user instructions take precedence.
   remaining limitations, and any integration requirements. Attach test evidence
   when the task requires it. Never include secrets.
 
+## Attribute changes and follow up on issues
+
+- Use the stable agent names `Codex`, `Claude`, and `Muse` consistently. Name
+  the agent that actually made each change; the human Git author alone is not
+  sufficient attribution. Keep the user's configured Git author identity.
+- Every new agent-created commit must include an `Agent: <name>` trailer and a
+  `Megillah-Task: <task-id>` trailer in its commit message. For shared repository
+  maintenance without a task, use `Megillah-Task: none (repository maintenance)`.
+  Example:
+
+  ```text
+  Fix coach session isolation
+
+  Agent: Codex
+  Megillah-Task: CS-2
+  ```
+
+- PR descriptions and Megillah change summaries must identify the implementing
+  agent, task, branch, commits, and affected files. If multiple agents contributed,
+  map each agent to their actual changes; do not claim another agent's work.
+- Preserve attribution when merging, squashing, or cherry-picking. A combined
+  commit must list each contributing agent and explain their respective scope.
+- When reporting a defect, use `[Agent: Codex]`, `[Agent: Claude]`, or
+  `[Agent: Muse]` in the issue title or Megillah comment, and include the relevant
+  task, commit, reproduction steps, expected/actual behavior, and evidence. Base
+  attribution on the change history; if uncertain, use `[Agent: Unconfirmed]`
+  rather than guessing. Distinguish the implementing agent from the reporter.
+- At the start of each work session, check the relevant Megillah task and linked
+  issues for your agent tag. A tagged issue is a request to investigate: acknowledge
+  it, reproduce or assess it, and record the fix or findings with verification.
+  Coordinate with the current task owner before editing their active work.
+
+## Keep Megillah synchronized with changes
+
+- Update the relevant Megillah task after each meaningful change or commit and
+  before handing work off, ending a work session, or marking the task delivered.
+- Each update must include `Agent: <name>`, a concise change summary and purpose,
+  affected files, branch and commit/PR references (or explicitly `uncommitted`),
+  checks actually run and their results, and remaining issues or blockers.
+- For fixes, link the original issue/comment and state whether it was reproduced
+  and how the fix was verified. Attach test output when the task requires it.
+- Describe partial work honestly; do not mark a task delivered until its acceptance
+  criteria are met. Do not expose credentials in summaries or attachments.
+- If Megillah cannot be updated, retain the handoff locally and tell the user the
+  task record is out of date; synchronize it when access is restored.
+
 ## Finding these rules
 
 `AGENTS.md` is the shared source of truth. `CLAUDE.md` points here for Claude.
