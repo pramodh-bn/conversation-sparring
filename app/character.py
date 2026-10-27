@@ -30,7 +30,7 @@ and is NOT used by default.
 
 import os
 
-import httpx
+from openai import OpenAI
 
 # Deflections used when nothing new was revealed this turn. They are
 # fixed strings that contain no scenario content, so they can never
@@ -128,11 +128,12 @@ class MetaSparkClient(CharacterAgent):
     no key is set it is fully inert: constructing it does nothing, and
     only calling ``respond()`` raises.
 
-    Each call POSTs to ``{base}/chat/completions`` with ``model`` and
-    ``messages`` of ``[{role: system, content: persona},
-    {role: user, content: user_text}]`` plus
-    ``Authorization: Bearer <key>``, and returns the first choice's
-    message content.
+    Each call goes through the ``openai`` library
+    (``OpenAI(base_url=..., api_key=...).chat.completions.create``) with
+    ``model`` and ``messages`` of ``[{role: system, content: persona},
+    {role: user, content: user_text}]``; the library sends
+    ``Authorization: Bearer <key>`` to ``{base}/chat/completions``. It
+    returns the first choice's message content.
     """
 
     def __init__(self, base_url=None, model=None, api_key=None):
@@ -173,19 +174,19 @@ class MetaSparkClient(CharacterAgent):
             )
         character = session_view.get("character", {}) or {}
         persona = character.get("persona", "") or ""
-        url = self.base_url.rstrip("/") + "/chat/completions"
-        response = httpx.post(
-            url,
-            json={
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": persona},
-                    {"role": "user", "content": user_text},
-                ],
-            },
-            headers={"Authorization": f"Bearer {self.api_key}"},
+        # Built only after the key and base checks above, so an
+        # unconfigured client never reaches the library (which would
+        # otherwise raise, or fall back to OPENAI_API_KEY).
+        # max_retries=0 keeps one request per call, as before.
+        client = OpenAI(
+            base_url=self.base_url, api_key=self.api_key, max_retries=0
+        )
+        completion = client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": persona},
+                {"role": "user", "content": user_text},
+            ],
             timeout=30.0,
         )
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+        return completion.choices[0].message.content
