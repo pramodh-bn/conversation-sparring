@@ -4,13 +4,15 @@ Every turn appends records of the form::
 
     {'turn_index': int, 'kind': str, 'input': ..., 'output': ...}
 
-where ``kind`` is one of 'classify' | 'gate_check' | 'reveal' | 'score'.
+where ``kind`` is one of 'classify' | 'gate_check' | 'reveal' | 'score'
+| 'coach_whisper' (Day 3/4: appended after 'score' on stalled turns
+only, when a coach is consulted).
 Stdlib only. No network, no API keys, no LLM.
 """
 
 import copy
 
-VALID_KINDS = ("classify", "gate_check", "reveal", "score")
+VALID_KINDS = ("classify", "gate_check", "reveal", "score", "coach_whisper")
 
 
 def record(decisions: list, turn_index: int, kind: str, input, output) -> dict:

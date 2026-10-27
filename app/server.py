@@ -5,6 +5,8 @@ Endpoints:
   POST /sessions/{id}/messages   send one question, get the reply + score
   GET  /sessions/{id}            session state (turns, decisions, score)
   GET  /                         the single-page chat UI
+  POST /sessions/{id}/branches  fork a new branch (becomes active)
+  GET  /sessions/{id}/branches  branch tree with per-branch scores
 
 The server uses only the scripted character, so it works with no API
 key. It never imports or instantiates MetaSparkClient. State is
@@ -20,6 +22,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.character import ScriptedCharacter
+from app.coach import RuleCoach
 from app.graph import load_scenario
 from app.session import Session
 
@@ -52,11 +55,20 @@ app = FastAPI(lifespan=lifespan)
 
 # One global scripted character instance; sessions are id -> Session.
 character = ScriptedCharacter()
+# Day 3/4 (CS-2): the default rule-based coach. It works with no API
+# key and no network; SparkCoach is never wired in here.
+coach = RuleCoach()
 sessions = {}
 
 
 class MessageIn(BaseModel):
     text: str
+    branch_id: str | None = None
+
+
+class BranchIn(BaseModel):
+    from_turn: int
+    from_branch_id: str | None = None
 
 
 def _score(session):
@@ -83,6 +95,7 @@ def _get_session(session_id):
 @app.post("/sessions")
 def create_session():
     scenario = get_scenario()
+
     session = Session(scenario)
     session_id = uuid4().hex
     sessions[session_id] = session
@@ -105,7 +118,12 @@ def post_message(session_id: str, body: MessageIn):
     session = _get_session(session_id)
     if not body.text or not body.text.strip():
         raise HTTPException(status_code=422, detail="text must not be empty")
-    turn = session.add_turn(body.text)
+    if body.branch_id is not None:
+        try:
+            session.set_active_branch(body.branch_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="unknown branch")
+    turn = session.add_turn(body.text, coach=coach)
     scenario = get_scenario()
     nodes_by_id = {node["id"]: node for node in scenario["nodes"]}
     # Build newly-revealed node dicts from the scenario nodes matching
@@ -121,6 +139,8 @@ def post_message(session_id: str, body: MessageIn):
         "reply": reply,
         "question_type": turn["question_type"],
         "newly_revealed": [node["title"] for node in newly_revealed],
+        "coach_whisper": turn["coach_whisper"],
+        "branch_id": session.active_branch_id,
         "score": score,
         "score_display": f"{score['revealed']}/{score['total']}",
     }
@@ -139,6 +159,34 @@ def get_session(session_id: str):
         "revealed_titles": _revealed_titles(session, scenario["nodes"]),
         "turns": session.turns,
         "decisions": session.decisions,
+        "branches": session.branch_summaries(),
+        "active_branch_id": session.active_branch_id,
+    }
+
+
+@app.post("/sessions/{session_id}/branches")
+def create_branch(session_id: str, body: BranchIn):
+    session = _get_session(session_id)
+    try:
+        branch_id = session.create_branch(
+            from_turn=body.from_turn, from_branch_id=body.from_branch_id
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="unknown branch")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {
+        "branch": session.branches[branch_id].summary(session.score_total),
+        "active_branch_id": session.active_branch_id,
+    }
+
+
+@app.get("/sessions/{session_id}/branches")
+def list_branches(session_id: str):
+    session = _get_session(session_id)
+    return {
+        "branches": session.branch_summaries(),
+        "active_branch_id": session.active_branch_id,
     }
 
 

@@ -95,3 +95,140 @@ def test_index_serves_html_with_input():
     assert res.status_code == 200
     assert "text/html" in res.headers["content-type"]
     assert "<input" in res.text
+
+
+def test_message_response_carries_coach_whisper_on_stalled_turn():
+    session_id = client.post("/sessions", json={}).json()["id"]
+    client.post(
+        f"/sessions/{session_id}/messages",
+        json={"text": "Did you miss the deadline again?"},
+    )
+    client.post(
+        f"/sessions/{session_id}/messages",
+        json={"text": "Is the report finished yet?"},
+    )
+    res = client.post(
+        f"/sessions/{session_id}/messages",
+        json={"text": "Is it going to be late again?"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["newly_revealed"] == []
+    assert data["coach_whisper"] == "What would you say is going on here?"
+
+
+def test_message_response_whisper_null_on_revealing_turn():
+    session_id = client.post("/sessions", json={}).json()["id"]
+    res = client.post(
+        f"/sessions/{session_id}/messages",
+        json={"text": "Did you miss the deadline again?"},
+    )
+    assert res.status_code == 200
+    assert res.json()["coach_whisper"] is None
+
+
+def _run_closed_script(session_id, count=5):
+    for text in [
+        "Did you miss the deadline again?",
+        "Is the report finished yet?",
+        "You're behind, right?",
+        "Did you tell your manager?",
+        "Is it going to be late again?",
+    ][:count]:
+        client.post(f"/sessions/{session_id}/messages", json={"text": text})
+
+
+def test_create_branch_endpoint_forks_and_activates():
+    session_id = client.post("/sessions", json={}).json()["id"]
+    _run_closed_script(session_id)
+    res = client.post(
+        f"/sessions/{session_id}/branches", json={"from_turn": 2}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["branch"]["id"] == "B"
+    assert data["branch"]["turn_count"] == 2
+    assert data["active_branch_id"] == "B"
+    # The original branch score is unchanged after the fork.
+    tree = client.get(f"/sessions/{session_id}/branches").json()
+    main = next(b for b in tree["branches"] if b["id"] == "main")
+    assert main["score"] == {"revealed": 2, "total": 7}
+
+
+def test_branch_listing_tree_shape():
+    session_id = client.post("/sessions", json={}).json()["id"]
+    _run_closed_script(session_id, count=3)
+    client.post(f"/sessions/{session_id}/branches", json={"from_turn": 2})
+    res = client.get(f"/sessions/{session_id}/branches")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["active_branch_id"] == "B"
+    by_id = {b["id"]: b for b in data["branches"]}
+    assert by_id["main"]["label"] == "Main"
+    assert by_id["main"]["turn_count"] == 3
+    assert by_id["B"]["parent_branch_id"] == "main"
+    assert by_id["B"]["fork_turn_index"] == 2
+    assert by_id["B"]["turn_count"] == 2
+
+
+def test_branch_switching_via_messages_branch_id():
+    session_id = client.post("/sessions", json={}).json()["id"]
+    _run_closed_script(session_id)
+    client.post(f"/sessions/{session_id}/branches", json={"from_turn": 2})
+    res = client.post(
+        f"/sessions/{session_id}/messages",
+        json={"text": "What's on your plate right now?", "branch_id": "main"},
+    )
+    assert res.status_code == 200
+    assert res.json()["branch_id"] == "main"
+    tree = client.get(f"/sessions/{session_id}/branches").json()
+    assert tree["active_branch_id"] == "main"
+    main = next(b for b in tree["branches"] if b["id"] == "main")
+    assert main["turn_count"] == 6
+
+
+def test_message_response_carries_branch_id():
+    session_id = client.post("/sessions", json={}).json()["id"]
+    res = client.post(
+        f"/sessions/{session_id}/messages",
+        json={"text": "Did you miss the deadline again?"},
+    )
+    assert res.json()["branch_id"] == "main"
+
+
+def test_unknown_branch_id_404():
+    session_id = client.post("/sessions", json={}).json()["id"]
+    assert (
+        client.post(
+            f"/sessions/{session_id}/messages",
+            json={"text": "Hello?", "branch_id": "zzz"},
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            f"/sessions/{session_id}/branches",
+            json={"from_turn": 0, "from_branch_id": "zzz"},
+        ).status_code
+        == 404
+    )
+
+
+def test_bad_from_turn_422():
+    session_id = client.post("/sessions", json={}).json()["id"]
+    _run_closed_script(session_id, count=1)
+    assert (
+        client.post(
+            f"/sessions/{session_id}/branches", json={"from_turn": 99}
+        ).status_code
+        == 422
+    )
+
+
+def test_get_session_gains_branches_summary():
+    session_id = client.post("/sessions", json={}).json()["id"]
+    _run_closed_script(session_id, count=2)
+    client.post(f"/sessions/{session_id}/branches", json={"from_turn": 1})
+    data = client.get(f"/sessions/{session_id}").json()
+    assert data["active_branch_id"] == "B"
+    assert {b["id"] for b in data["branches"]} == {"main", "B"}
