@@ -38,7 +38,7 @@ cd ~/workspace/hackathon-conversation-sparring
 .venv/bin/python -m pytest
 ```
 
-Expected: **115 passed**. (One harmless Starlette deprecation warning
+Expected: **132 passed**. (One harmless Starlette deprecation warning
 about `httpx` in `TestClient` may appear; it is not a failure.)
 
 ## Run the scripted demo (no API key needed)
@@ -93,6 +93,9 @@ API:
   turn N (becomes active).
 - `GET /sessions/{id}/branches` → branch tree: id, label, parent, fork
   point, score, turn count per branch.
+- `GET /sessions/{id}/portrait` → portrait payload: expression
+  (guarded/softening/open from score thirds), stub flag, and the
+  portrait image as a data URL. 404 for unknown sessions.
 
 ## Run with the live model (CS-6)
 
@@ -111,6 +114,26 @@ URL has no default — take it from Meta's official docs. Prefer a
 gitignored `.env` file over inline env vars so the key never lands in
 shell history. Scoring stays deterministic (the judge never calls the
 model); only the character's voice and the coach's whispers change.
+
+## Portrait (CS-7, stub — not a live render)
+
+`GET /sessions/{id}/portrait` returns the character portrait for the
+active branch's score: `{"expression", "stub": true, "image"}` where
+`image` is an SVG data URL. Expression follows score thirds —
+0–2/7 guarded, 3–4/7 softening, 5–7/7 open — so progress shows as a
+face as well as a number. The UI shows it under the score with a
+stub caption; servers without the endpoint simply hide the panel.
+
+The generator is a deterministic labeled-SVG stub: no network, no
+key, clearly marked in-image, in the UI caption, and here. Nothing
+about it is presented as a real Muse Image render. Live swap notes
+(for when the user confirms an image endpoint and key — none is
+assumed, and the Meta chat key is NOT assumed to work for image):
+model muse-image-1.0 via the Responses API per Meta's official
+cookbook (meta-models/meta-model-cookbook 05_muse_image), refining
+one base portrait per expression state with previous_response_id;
+per-state instructions are reserved in app/portrait.py
+(EXPRESSION_PROMPTS). Swap cost is one $0.01 verification call.
 
 ## What is stubbed (read before assuming more)
 
@@ -140,9 +163,11 @@ model); only the character's voice and the coach's whispers change.
   stays identical.
 - **One scenario only** (`scenarios/teammate.json`): the teammate who
   keeps missing deadlines, 7 nodes. Scenarios 2–3, coach, rewind/
-  branches, voice, and Muse Image portraits are explicitly out of
+  branches, voice, and portraits are explicitly out of
   scope for Days 1–2; coach and rewind/branches landed in Days 3–4.
-  Scenarios 2–3, voice, and portraits are still not built.
+  Scenarios 2–3 and voice are still not built; portrait plumbing
+  landed in CS-7 with a labeled stub (live render pending endpoint
+  and key confirmation).
 - **No persistence:** sessions live in server memory; the decision log
   is returned by `GET /sessions/{id}` but is not written to disk.
 
@@ -225,5 +250,5 @@ proof numbers (closed-only 2/7, good run 7/7) are unchanged.
   headless full playthrough against the live server passed with zero
   page errors (Day 1/2 fallback path code-reviewed only; no
   real-browser visual pass yet).
-- **Still stubbed:** voice, Muse Image portraits, scenarios 2–3,
+- **Still stubbed:** voice, live portrait renders (stub in place), scenarios 2–3,
   session persistence to disk, live LLM calls in tests.

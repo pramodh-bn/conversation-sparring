@@ -28,6 +28,10 @@
   #branches li { margin-bottom: 0.25rem; }
   #branches button { padding: 0.25rem 0.75rem; }
   #branches button.current { font-weight: bold; border: 2px solid #1a5276; }
+  #portrait-panel { border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; margin-bottom: 1rem; }
+  #portrait-panel[hidden] { display: none; }
+  #portrait { width: 120px; height: 120px; }
+  #portrait-caption { font-size: 0.85rem; color: #666; }
 </style>
 </head>
 <body>
@@ -35,6 +39,11 @@
 <p>Ask questions. Open questions go deeper than yes/no ones — try asking
 about feelings, worries, and what matters, not just facts.</p>
 <div id="score-line">Score: <span id="score">0/7</span></div>
+<div id="portrait-panel" hidden>
+  <h2>Portrait</h2>
+  <img id="portrait" alt="Character portrait">
+  <div id="portrait-caption">Portrait stub — placeholder, not a live render.</div>
+</div>
 <div id="branch-panel">
   <h2>Branches</h2>
   <ul id="branches"></ul>
@@ -79,6 +88,9 @@ const whisperPanelEl = document.getElementById('whisper-panel');
 const whisperTextEl = document.getElementById('whisper-text');
 const branchPanelEl = document.getElementById('branch-panel');
 const branchesEl = document.getElementById('branches');
+const portraitPanelEl = document.getElementById('portrait-panel');
+const portraitEl = document.getElementById('portrait');
+const portraitCaptionEl = document.getElementById('portrait-caption');
 
 function activeTurns() {
   if (!branchCache[activeBranchId]) branchCache[activeBranchId] = [];
@@ -158,6 +170,7 @@ function renderTree() {
 }
 
 function renderActiveBranch() {
+  refreshPortrait();
   transcriptEl.innerHTML = '';
   activeTurns().forEach(function (turn) {
     addMessage(turn.who, turn.text);
@@ -172,6 +185,22 @@ function switchBranch(id) {
   if (!branchCache[id]) branchCache[id] = [];
   activeBranchId = id;
   renderActiveBranch();
+}
+
+async function refreshPortrait() {
+  if (!sessionId) return;
+  try {
+    const res = await fetch('/sessions/' + sessionId + '/portrait');
+    if (!res.ok) return;
+    const data = await res.json();
+    portraitEl.src = data.image;
+    portraitEl.alt = 'Character portrait: ' + data.expression;
+    portraitCaptionEl.textContent = data.expression +
+      ' (stub — placeholder, not a live Muse Image render)';
+    portraitPanelEl.hidden = false;
+  } catch (err) {
+    portraitPanelEl.hidden = true;
+  }
 }
 
 async function refreshTree() {
@@ -261,6 +290,7 @@ async function sendMessage() {
     scoreEl.textContent = data.score_display;
   }
   renderTree();
+  refreshPortrait();
   if (data.coach_whisper) showWhisper(data.coach_whisper, userTurnCount() - 1);
 }
 
