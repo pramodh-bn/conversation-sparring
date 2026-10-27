@@ -127,6 +127,36 @@ def test_message_response_whisper_null_on_revealing_turn():
     assert res.json()["coach_whisper"] is None
 
 
+def test_coach_meaning_rotation_is_per_session():
+    # CS-C43: rotation must not leak across sessions. Two fresh
+    # sessions asking the same stalling sequence must open with
+    # identical meaning whispers.
+    setup = [
+        "Did you miss the deadline again?",
+        "Is the report finished yet?",
+        "What's on your plate right now?",
+        "How has this week actually been for you?",
+    ]
+    final = "What color is the status report?"
+    whispers = []
+    for _ in range(2):
+        session_id = client.post("/sessions", json={}).json()["id"]
+        for text in setup:
+            res = client.post(
+                f"/sessions/{session_id}/messages", json={"text": text}
+            )
+            assert res.status_code == 200
+        res = client.post(
+            f"/sessions/{session_id}/messages", json={"text": final}
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["question_type"] == "open"
+        assert data["newly_revealed"] == []
+        whispers.append(data["coach_whisper"])
+    assert whispers == ["How did that feel?", "How did that feel?"]
+
+
 def _run_closed_script(session_id, count=5):
     for text in [
         "Did you miss the deadline again?",

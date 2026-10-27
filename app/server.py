@@ -66,6 +66,10 @@ character = ScriptedCharacter()
 # key and no network (CS-6 selects SparkCoach when configured).
 coach = RuleCoach()
 sessions = {}
+# CS-C43: RuleCoach rotation is per-instance state, so each session gets
+# its own RuleCoach. Sharing the module-global coach leaked rotation
+# across sessions.
+session_coaches = {}
 
 
 def _live_model_configured():
@@ -86,6 +90,18 @@ def get_coach():
     """Active coach: SparkCoach iff live model configured, else RuleCoach."""
     if _live_model_configured():
         return SparkCoach()
+    return coach
+
+
+def get_session_coach(session_id: str):
+    """Coach for one session (CS-C43): SparkCoach iff live configured
+    (stateless, safe to mint per call), else that session's own
+    RuleCoach so meaning rotation never leaks across sessions."""
+    if _live_model_configured():
+        return SparkCoach()
+    coach = session_coaches.get(session_id)
+    if coach is None:
+        coach = session_coaches[session_id] = RuleCoach()
     return coach
 
 
@@ -151,7 +167,7 @@ def post_message(session_id: str, body: MessageIn):
             session.set_active_branch(body.branch_id)
         except KeyError:
             raise HTTPException(status_code=404, detail="unknown branch")
-    turn = session.add_turn(body.text, coach=get_coach())
+    turn = session.add_turn(body.text, coach=get_session_coach(session_id))
     scenario = get_scenario()
     nodes_by_id = {node["id"]: node for node in scenario["nodes"]}
     # Build newly-revealed node dicts from the scenario nodes matching
