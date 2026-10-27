@@ -38,7 +38,7 @@ cd ~/workspace/hackathon-conversation-sparring
 .venv/bin/python -m pytest
 ```
 
-Expected: **108 passed**. (One harmless Starlette deprecation warning
+Expected: **115 passed**. (One harmless Starlette deprecation warning
 about `httpx` in `TestClient` may appear; it is not a failure.)
 
 ## Run the scripted demo (no API key needed)
@@ -94,24 +94,43 @@ API:
 - `GET /sessions/{id}/branches` → branch tree: id, label, parent, fork
   point, score, turn count per branch.
 
+## Run with the live model (CS-6)
+
+The server speaks to Muse Spark instead of the scripted
+character/coach when BOTH variables are set (any other combination
+stays scripted):
+
+```bash
+cd ~/workspace/hackathon-conversation-sparring
+META_MODEL_API_KEY=<key> META_MODEL_API_BASE=<official base URL> \
+  .venv/bin/python -m uvicorn app.server:app --port 8000
+```
+
+Optional: `META_MODEL_API_MODEL` (default `muse-spark-1.3`). The base
+URL has no default — take it from Meta's official docs. Prefer a
+gitignored `.env` file over inline env vars so the key never lands in
+shell history. Scoring stays deterministic (the judge never calls the
+model); only the character's voice and the coach's whispers change.
+
 ## What is stubbed (read before assuming more)
 
-- **The character is scripted, not a live model.** `ScriptedCharacter`
+- **The character is scripted by default, live when configured.** `ScriptedCharacter`
   (in `app/character.py`) is the default: it voices newly revealed
   node text in Alex's voice and deflects otherwise. Everything works
-  with no API key and no network.
-- **The real Muse Spark client exists but is inert.** `MetaSparkClient`
-  (same file) is an OpenAI-compatible chat-completions client. It is
-  NOT used by the server, the demo, or any test. It needs three env
-  vars, and there is deliberately NO hardcoded base URL:
+  with no API key and no network. Set both META_MODEL_API_KEY and
+  META_MODEL_API_BASE to switch the server to the live model (CS-6).
+- **The live client activates only with env config.** `MetaSparkClient`
+  (same file) is an OpenAI-compatible chat-completions client. The
+  server selects it when configured; the demo and tests never use it live.
+  It needs three env vars; the base URL has NO hardcoded default:
   - `META_MODEL_API_KEY` — required; without it, `respond()` raises a
     clear `RuntimeError` (import/construction never crash).
   - `META_MODEL_API_BASE` — required; no default is baked in because
     the base URL was not verified against Meta's docs during this
     build. Set it from Meta's official docs when wiring the live model.
   - `META_MODEL_API_MODEL` — default `muse-spark-1.3`.
-  - No key has been provided by the user, and none is stored anywhere
-    in this repo. Do not commit one.
+  - The key lives in the gitignored `.env` (repo root) when present;
+    never commit one.
 - **The classifier is rule-based v1** (`app/classify.py`): meaning
   keywords checked first, then closed-question patterns (auxiliary
   starters, tag questions), then wh-word open questions, default open.

@@ -8,11 +8,15 @@ Endpoints:
   POST /sessions/{id}/branches  fork a new branch (becomes active)
   GET  /sessions/{id}/branches  branch tree with per-branch scores
 
-The server uses only the scripted character, so it works with no API
-key. It never imports or instantiates MetaSparkClient. State is
-in-memory only: restarting the server drops all sessions.
+By default the server uses the scripted character and RuleCoach, so it
+works with no API key. When BOTH META_MODEL_API_KEY and
+META_MODEL_API_BASE are set it switches to MetaSparkClient and
+SparkCoach (CS-6 live wiring). Partial config stays scripted.
+All state is process-local: restarting the server drops all sessions.
+See README.md for the live-model setup.
 """
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
@@ -21,8 +25,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app.character import ScriptedCharacter
-from app.coach import RuleCoach
+from app.character import MetaSparkClient, ScriptedCharacter
+from app.coach import RuleCoach, SparkCoach
 from app.graph import load_scenario
 from app.session import Session
 
@@ -53,12 +57,35 @@ async def lifespan(app):
 
 app = FastAPI(lifespan=lifespan)
 
-# One global scripted character instance; sessions are id -> Session.
+# Default (no-key) instances. get_character()/get_coach() select the live
+# Meta Spark pair instead when both env vars are present (CS-6).
+# Sessions are id -> Session.
 character = ScriptedCharacter()
 # Day 3/4 (CS-2): the default rule-based coach. It works with no API
-# key and no network; SparkCoach is never wired in here.
+# key and no network (CS-6 selects SparkCoach when configured).
 coach = RuleCoach()
 sessions = {}
+
+
+def _live_model_configured():
+    """True only when BOTH the key and base URL env vars are set."""
+    return bool(os.environ.get("META_MODEL_API_KEY")) and bool(
+        os.environ.get("META_MODEL_API_BASE")
+    )
+
+
+def get_character():
+    """Active character agent: live Meta Spark iff configured (CS-6)."""
+    if _live_model_configured():
+        return MetaSparkClient()
+    return character
+
+
+def get_coach():
+    """Active coach: SparkCoach iff live model configured, else RuleCoach."""
+    if _live_model_configured():
+        return SparkCoach()
+    return coach
 
 
 class MessageIn(BaseModel):
@@ -123,7 +150,7 @@ def post_message(session_id: str, body: MessageIn):
             session.set_active_branch(body.branch_id)
         except KeyError:
             raise HTTPException(status_code=404, detail="unknown branch")
-    turn = session.add_turn(body.text, coach=coach)
+    turn = session.add_turn(body.text, coach=get_coach())
     scenario = get_scenario()
     nodes_by_id = {node["id"]: node for node in scenario["nodes"]}
     # Build newly-revealed node dicts from the scenario nodes matching
@@ -133,7 +160,9 @@ def post_message(session_id: str, body: MessageIn):
         for node_id in turn["newly_revealed"]
         if node_id in nodes_by_id
     ]
-    reply = character.respond(session.session_view(), body.text, newly_revealed)
+    reply = get_character().respond(
+        session.session_view(), body.text, newly_revealed
+    )
     score = _score(session)
     return {
         "reply": reply,
