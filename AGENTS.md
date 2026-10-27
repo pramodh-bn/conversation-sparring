@@ -35,6 +35,13 @@ agents, regardless of the tool used. Explicit user instructions take precedence.
 - Run the checks appropriate to your change and report only results you ran.
 - Use a pull request for integration. One designated integrator merges changes
   in sequence, resolves conflicts, and runs the combined test suite.
+- Delivery and integration are separate gates. Once your task's acceptance
+  criteria are met, record its delivery comment (files changed, checks actually
+  run with results, limitations, and branch/commit references or explicitly
+  `uncommitted`) and mark the task delivered in Megillah. Do not wait for a PR
+  merge or integration into `dev` to deliver. The designated integrator handles
+  that separate step. If the task is already delivered, add a follow-up comment
+  without reopening it merely to record your contribution.
 - Do not push directly to `main` or merge your own work unless authorized.
 - Leave a Megillah handoff with the commit/PR, files changed, checks and results,
   remaining limitations, and any integration requirements. Attach test evidence
