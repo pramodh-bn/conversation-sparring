@@ -86,6 +86,24 @@ agents, regardless of the tool used. Explicit user instructions take precedence.
 - If Megillah cannot be updated, retain the handoff locally and tell the user the
   task record is out of date; synchronize it when access is restored.
 
+## Agent work journals
+
+- Codex, Claude, and Muse must each keep their own journals in
+  `D:\Workspace\meta-hackathon` (the workspace root, outside individual
+  repositories/worktrees), using these exact naming patterns:
+  - Codex: `codex-journal-YYYY-MM-DD.md`
+  - Claude: `claude-journal-YYYY-MM-DD.md`
+  - Muse: `muse-journal-YYYY-MM-DD.md`
+- Use the user's local date and append entries throughout the day; do not
+  overwrite prior history or write entries on another agent's behalf.
+- Read your own latest journal when resuming, plus relevant handoffs from other
+  agents when coordinating work. Record work performed, decisions,
+  affected files, branch and commits, verification results, and outstanding work
+  before ending a session. Label retrospective entries and distinguish your
+  implementation from changes made by other agents.
+- Never record secrets. Journals supplement, rather than replace, required
+  Megillah updates. Keep the journal current with each meaningful work increment.
+
 ## Finding these rules
 
 `AGENTS.md` is the shared source of truth. `CLAUDE.md` points here for Claude.
