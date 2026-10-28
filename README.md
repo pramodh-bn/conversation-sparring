@@ -70,12 +70,26 @@ cd ~/workspace/hackathon-conversation-sparring
 .venv/bin/python -m uvicorn app.server:app --port 8000
 ```
 
-Then open http://127.0.0.1:8000/ — a single-page chat: type a
-question, see Alex's reply, see the score "x/7" and the list of
-revealed node titles, coach whispers with rewind buttons on stalled
-turns, and a branch tree with per-branch scores. "New session" starts
-over. Sessions are
-in-memory only; restarting the server clears them.
+Then open http://127.0.0.1:8000/ — a single-page chat (no build step,
+no network assets). On a desktop the conversation is the main column
+and stays put (the transcript scrolls inside it, the question box is
+always visible); a sidebar keeps the live score "x/7" with seven
+progress marks, the branch list with per-branch scores, the portrait
+stub, and the list of uncovered needs. A coach whisper appears as its
+own card under the stalled reply with "Try again from here", which
+forks a branch; every one of your questions also has a small
+"Retry from here" link. After a rewind the transcript marks the fork
+and the score card shows Main and the retry branch side by side. At
+7/7 a scorecard (final score, branches tried, before → after) replaces
+the question box. On a phone the score strip stays pinned at the top,
+the question box at the bottom, and the sidebar collapses.
+"New session" asks for a second click when there is something to lose.
+The page follows the OS light/dark setting and reduced-motion setting.
+The score counts revealed scenario needs only; it is not a measure of
+real-world skill. Sessions are in-memory only; restarting the server
+clears them. `tests/test_ui_page.py` pins the page structure (ids,
+labels, roles, honest stub caption, no hidden scenario text); layout
+and behaviour were verified in a real browser run recorded on CS-18.
 
 API:
 

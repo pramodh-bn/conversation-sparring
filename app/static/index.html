@@ -3,75 +3,212 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>Conversation Sparring</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a5276'/%3E%3Cpath d='M7 9h18v11H15l-5 4v-4H7z' fill='%23fff'/%3E%3C/svg%3E">
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #222; }
-  h1 { font-size: 1.4rem; }
-  h2 { font-size: 1.1rem; margin-bottom: 0.25rem; }
-  #score-line { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 2px solid #1a5276; padding: 0.75rem 0; font-weight: bold; margin: 0.5rem 0; }
-  #score-branch { font-weight: normal; }
-  #completion-summary { border: 2px solid #1a5276; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
-  #completion-summary[hidden] { display: none; }
-  #transcript { border: 1px solid #ccc; border-radius: 6px; padding: 1rem; min-height: 200px; margin-bottom: 1rem; }
-  .msg { margin-bottom: 0.75rem; }
-  .msg .who { font-weight: bold; }
-  .msg.user .who { color: #1a5276; }
-  .msg.character .who { color: #6c3483; }
-  #composer { display: flex; gap: 0.5rem; }
-  #question { flex: 1; padding: 0.5rem; font-size: 1rem; }
-  button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
-  #revealed { margin-top: 0.25rem; }
-  #revealed li { margin-bottom: 0.25rem; }
-  #whisper-panel { border: 1px dashed #1a5276; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
-  #whisper-panel .who { font-weight: bold; color: #1a5276; }
-  #whisper-panel button { margin-left: 0.5rem; }
-  #whisper-panel[hidden], #branch-panel[hidden] { display: none; }
-  #branch-panel { border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; margin-bottom: 1rem; }
-  #branches { list-style: none; padding-left: 0; margin: 0.25rem 0; }
-  #branches li { margin-bottom: 0.25rem; }
-  #branches button { padding: 0.25rem 0.75rem; }
-  #branches button.current { font-weight: bold; border: 2px solid #1a5276; }
-  #portrait-panel { border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; margin-bottom: 1rem; }
-  #portrait-panel[hidden] { display: none; }
-  #portrait { width: 120px; height: 120px; }
-  #portrait-caption { font-size: 0.85rem; color: #666; }
+  /* Colour tokens: light by default, dark via the OS setting. */
+  :root {
+    --bg: #f4f6f8; --surface: #ffffff; --text: #1b1f24; --muted: #586270;
+    --border: #d3d9e0; --accent: #1a5276; --accent-ink: #ffffff; --accent-soft: #e3eef6;
+    --char-bg: #f1eaf6; --char-ink: #5b2a73; --user-bg: #1a5276; --user-ink: #ffffff; --user-who: #cfe4f3;
+    --coach-bg: #fff6dd; --coach-border: #b36b00; --coach-ink: #1b1f24;
+    --mark-off: #dfe4ea; --focus: #0b63ce; --danger-bg: #fdecea; --danger-ink: #8a1c12;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1318; --surface: #161c23; --text: #e8ecf1; --muted: #a2adba;
+      --border: #2b3541; --accent: #7ab8e6; --accent-ink: #0b1a26; --accent-soft: #1b2c3a;
+      --char-bg: #241c2c; --char-ink: #d9b8ec; --user-bg: #245a82; --user-ink: #ffffff; --user-who: #cfe4f3;
+      --coach-bg: #2b2412; --coach-border: #d79b2b; --coach-ink: #e8ecf1;
+      --mark-off: #2c3541; --focus: #8cc4f0; --danger-bg: #3a1a17; --danger-ink: #ffb4a9;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  h1 { font-size: 1.25rem; margin: 0; line-height: 1.2; }
+  h2 { font-size: .8rem; margin: 0 0 .5rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  p { margin: 0; }
+  button { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .5rem 1rem; min-height: 44px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .6; cursor: default; }
+  button.primary, #rewind { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.ghost { background: transparent; color: var(--muted); }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: .85rem 1rem; box-shadow: var(--shadow); }
+  .card[hidden], #whisper-panel[hidden], #completion-summary[hidden], #composer[hidden], #branch-panel[hidden], #portrait-panel[hidden], #revealed-empty[hidden] { display: none; }
+
+  /* Layout: one column on phones; chat + sticky sidebar from 900px. */
+  .app { max-width: 1280px; margin: 0 auto; padding: 0 1rem 1rem; display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "score" "chat" "side"; }
+  .topbar { grid-area: top; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding-top: .9rem; }
+  .brand p { color: var(--muted); font-size: .9rem; margin-top: .25rem; max-width: 60ch; }
+  #new-session { flex: none; }
+  #new-session.armed { border-color: var(--danger-ink); color: var(--danger-ink); background: var(--danger-bg); }
+
+  /* Score card. Always in view: sticky strip on phones, top of the sidebar on desktop. */
+  #score-line { grid-area: score; position: sticky; top: 0; z-index: 10; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: .6rem .9rem; box-shadow: var(--shadow); }
+  .score-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: .1rem .6rem; }
+  .score-label { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+  .score-live { display: inline-flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
+  #score { font-size: 1.9rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  #score-branch { color: var(--muted); font-weight: 600; font-size: .95rem; }
+  #progress { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; margin-top: .45rem; }
+  .mark { height: 10px; border-radius: 5px; background: var(--mark-off); transition: background .3s; }
+  .mark.on { background: var(--accent); }
+  #score-compare { margin-top: .4rem; font-size: .85rem; color: var(--muted); }
+  #score-compare[hidden], .score-note[hidden] { display: none; }
+  #score-compare strong { color: var(--text); }
+  .score-note { display: none; margin-top: .5rem; font-size: .8rem; color: var(--muted); }
+
+  /* Conversation. */
+  .chat { grid-area: chat; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  #transcript { flex: 1; min-height: 14rem; overflow-y: auto; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+  .msg { width: fit-content; max-width: min(78%, 60ch); padding: .55rem .85rem; margin: 0 0 .5rem; border-radius: 14px; background: var(--char-bg); scroll-margin-bottom: 7rem; overflow-wrap: anywhere; }
+  .msg .who { font-weight: 700; color: var(--char-ink); }
+  .msg.user { margin-left: auto; background: var(--user-bg); color: var(--user-ink); border-bottom-right-radius: 4px; }
+  .msg.user .who { color: var(--user-who); }
+  .msg.character { border-bottom-left-radius: 4px; }
+  .msg.system { max-width: 100%; margin: .5rem auto; text-align: center; background: var(--danger-bg); color: var(--danger-ink); border-radius: 10px; }
+  .msg.system .who { color: inherit; }
+  .msg-rewind { display: block; margin: -.3rem .25rem .6rem auto; min-height: 28px; padding: 2px 8px; border: 0; background: none; color: var(--muted); font-size: .8rem; text-decoration: underline; }
+  .msg-rewind:hover, .msg-rewind:focus-visible { color: var(--accent); }
+  .fork-marker { display: flex; align-items: center; gap: .6rem; margin: .75rem 0; font-size: .85rem; font-weight: 600; color: var(--accent); }
+  .fork-marker::before, .fork-marker::after { content: ""; flex: 1; border-top: 2px dashed var(--accent); opacity: .5; }
+  .fork-marker span { text-align: center; max-width: 70%; }
+
+  /* Coach card: clearly not a character line, directly under the stalled reply. */
+  #whisper-panel { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; margin-top: .6rem; padding: .7rem 1rem; background: var(--coach-bg); color: var(--coach-ink); border: 1px solid var(--coach-border); border-left-width: 6px; border-radius: 12px; }
+  #whisper-panel .who { font-weight: 700; }
+  #whisper-text { flex: 1 1 14rem; }
+  #rewind { margin-left: auto; }
+  .coach-note { flex-basis: 100%; font-size: .8rem; color: var(--muted); }
+
+  #composer { display: flex; gap: .5rem; margin-top: .6rem; position: sticky; bottom: 0; padding: .5rem 0 calc(.5rem + env(safe-area-inset-bottom)); background: var(--bg); }
+  #question { flex: 1; min-width: 0; min-height: 44px; padding: .5rem .75rem; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+
+  /* Final scorecard: replaces the composer once every need is revealed. */
+  #completion-summary { margin-top: .6rem; padding: 1rem 1.1rem; border: 2px solid var(--accent); border-radius: 12px; background: var(--accent-soft); }
+  #completion-title { font-size: 1.1rem; margin: 0 0 .25rem; text-transform: none; letter-spacing: 0; color: var(--text); }
+  #completion-big { font-size: 2.4rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--accent); }
+  #completion-result { margin-top: .25rem; }
+  #completion-compare { margin-top: .4rem; font-weight: 600; }
+  #completion-compare:empty { display: none; }
+  .completion-note { margin-top: .5rem; font-size: .85rem; color: var(--muted); }
+  .completion-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+
+  /* Sidebar. */
+  .side { grid-area: side; min-width: 0; min-height: 0; }
+  .side-details > summary { min-height: 44px; display: flex; align-items: center; padding: 0 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--muted); font-weight: 600; cursor: pointer; }
+  .side-body { display: grid; gap: 1rem; margin-top: 1rem; }
+  #branches { list-style: none; padding: 0; margin: 0; display: grid; gap: .5rem; }
+  #branches button { width: 100%; text-align: left; display: grid; gap: .35rem; padding: .55rem .75rem; border-radius: 10px; }
+  #branches button.current { border: 2px solid var(--accent); background: var(--accent-soft); font-weight: 700; }
+  #branches button.just-created { animation: pulse 1.2s ease-out 1; }
+  .b-line { display: flex; flex-wrap: wrap; gap: .1rem .4rem; align-items: baseline; }
+  .b-score { font-variant-numeric: tabular-nums; }
+  .b-bar { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; }
+  .b-bar span { height: 6px; border-radius: 3px; background: var(--mark-off); }
+  .b-bar span.on { background: var(--accent); }
+  #portrait { display: block; width: 100%; max-width: 200px; height: auto; aspect-ratio: 1; margin: 0 auto; border-radius: 10px; }
+  #portrait-caption { margin-top: .5rem; font-size: .85rem; color: var(--muted); text-align: center; }
+  #revealed { margin: 0; padding-left: 1.1rem; }
+  #revealed li { margin-bottom: .25rem; }
+  #revealed-empty { color: var(--muted); font-size: .9rem; }
+
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 var(--accent); } 100% { box-shadow: 0 0 0 12px transparent; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  @media (pointer: coarse) { .msg-rewind { min-height: 44px; } }
+
+  @media (min-width: 900px) {
+    html, body { height: 100%; overflow: hidden; }
+    .app { height: 100dvh; grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: "top top" "chat score" "chat side"; padding-bottom: 1rem; }
+    #score-line { padding: .85rem 1.1rem; }
+    #score { font-size: 3rem; }
+    #progress { margin-top: .6rem; }
+    .mark { height: 12px; }
+    .score-note { display: block; }
+    #composer { position: static; padding: 0; }
+    .side { overflow-y: auto; padding-right: 2px; }
+    .side-details > summary { display: none; }
+    .side-body { margin-top: 0; }
+  }
 </style>
 </head>
 <body>
-<h1>Conversation Sparring</h1>
-<p>Ask questions. Open questions go deeper than yes/no ones — try asking
-about feelings, worries, and what matters, not just facts.</p>
-<div id="score-line" role="status" aria-live="polite" aria-atomic="true">Score: <span id="score">0/7</span> <span id="score-branch"></span></div>
-<div id="portrait-panel" hidden>
-  <h2>Portrait</h2>
-  <img id="portrait" alt="Character portrait">
-  <div id="portrait-caption">Portrait stub — placeholder, not a live render.</div>
+<noscript>This practice tool needs JavaScript.</noscript>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>Conversation Sparring</h1>
+      <p id="hint">Practice a hard conversation. Ask open questions — about feelings, worries, what matters — to uncover what is really going on. Stuck? Rewind and try again.</p>
+    </div>
+    <button id="new-session" type="button" class="ghost">New session</button>
+  </header>
+
+  <div id="score-line">
+    <div class="score-head">
+      <span class="score-label">Score: </span>
+      <span class="score-live" role="status" aria-live="polite" aria-atomic="true"><span id="score">0/7</span> <span id="score-branch"></span></span>
+    </div>
+    <div id="progress" role="img" aria-label="0 of 7 scenario needs revealed"></div>
+    <div id="score-compare" hidden></div>
+    <p class="score-note">Counts the hidden scenario needs you have uncovered. It is not a measure of real-world skill.</p>
+  </div>
+
+  <main class="chat" aria-label="Conversation">
+    <div id="transcript" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation transcript" tabindex="0"></div>
+    <div id="whisper-panel" role="status" aria-live="polite" hidden>
+      <span class="who">Coach: </span><span id="whisper-text"></span>
+      <button id="rewind" type="button">Try again from here</button>
+      <span class="coach-note">Rewinding keeps this attempt as its own branch, so you can compare.</span>
+    </div>
+    <section id="completion-summary" aria-labelledby="completion-title" hidden>
+      <h2 id="completion-title">All scenario needs revealed</h2>
+      <div id="completion-big" aria-hidden="true"></div>
+      <p id="completion-result" role="status" aria-live="polite"></p>
+      <p id="completion-compare"></p>
+      <p class="completion-note">Compare your branches, retry from any of your questions, or start a new practice session. The score counts hidden scenario needs you uncovered, not real-world skill.</p>
+      <div class="completion-actions">
+        <button id="summary-rewind" type="button">Rewind to an earlier question</button>
+        <button id="summary-new-session" type="button" class="primary">Start a new session</button>
+      </div>
+    </section>
+    <div id="composer">
+      <label for="question" class="sr-only">Your question for the teammate</label>
+      <input id="question" type="text" placeholder="Ask your teammate a question…" autocomplete="off" enterkeyhint="send">
+      <button id="send" type="button" class="primary">Send</button>
+    </div>
+  </main>
+
+  <aside class="side" aria-label="Progress and branches">
+    <details id="side-details" class="side-details" open>
+      <summary>Branches, portrait and what you uncovered</summary>
+      <div class="side-body">
+        <div id="branch-panel" class="card">
+          <h2>Branches</h2>
+          <ul id="branches"></ul>
+        </div>
+        <div id="portrait-panel" class="card" hidden>
+          <h2>Portrait</h2>
+          <img id="portrait" alt="Character portrait">
+          <div id="portrait-caption">Portrait stub — placeholder, not a live render.</div>
+        </div>
+        <div class="card">
+          <h2>Uncovered</h2>
+          <ul id="revealed"></ul>
+          <p id="revealed-empty">Nothing yet. Open questions about feelings and worries go deepest.</p>
+        </div>
+      </div>
+    </details>
+  </aside>
 </div>
-<div id="branch-panel">
-  <h2>Branches</h2>
-  <ul id="branches"></ul>
-</div>
-<div id="transcript" aria-live="polite"></div>
-<div id="whisper-panel" hidden>
-  <span class="who">Coach: </span><span id="whisper-text"></span>
-  <button id="rewind" type="button">Rewind to this turn</button>
-</div>
-<section id="completion-summary" aria-labelledby="completion-title" hidden>
-  <h2 id="completion-title">All scenario needs revealed</h2>
-  <p id="completion-result" role="status" aria-live="polite"></p>
-  <p>Compare your branches above, or start a new practice session.</p>
-  <button id="summary-new-session" type="button">Start a new session</button>
-</section>
-<div id="composer">
-  <input id="question" type="text" placeholder="Ask your teammate a question…" autocomplete="off">
-  <button id="send" type="button">Send</button>
-  <button id="new-session" type="button">New session</button>
-</div>
-<h2>Revealed</h2>
-<ul id="revealed"></ul>
 
 <script>
-// Day 3/4 UI (CS-4): coach whisper panel + branch tree, same page.
+// Day 3/4 UI (CS-4) + score visibility (CS-17) + presentation pass (CS-18).
 //
 // Branch state is cached client-side: every reply is stored per branch,
 // so switching branches re-renders instantly with no extra endpoint.
@@ -81,43 +218,122 @@ about feelings, worries, and what matters, not just facts.</p>
 //
 // Defensive by design (Brief 3): when coach_whisper is null the panel
 // stays hidden, and when the branch endpoints are absent (Day 1/2
-// server) the page behaves exactly like the Day 1/2 UI.
+// server) the page behaves like the Day 1/2 UI. Presentation only: all
+// scores, titles and whispers come from the server responses; hidden
+// nodes are never named here.
 let sessionId = null;
 let activeBranchId = "main";
 let branchCache = {};   // branch id -> [{who, text, newlyRevealed}]
 let branchTree = [];    // last GET branches result
+let branchMeta = {};    // branch id -> {parent, forkTurn, markerAt, fresh}
 let branchesSupported = true;
 let pendingRewindTurn = null;
+let characterName = 'Alex';
+let sending = false;
+let armTimer = null;
 
-const transcriptEl = document.getElementById('transcript');
-const scoreEl = document.getElementById('score');
-const scoreBranchEl = document.getElementById('score-branch');
-const completionSummaryEl = document.getElementById('completion-summary');
-const completionResultEl = document.getElementById('completion-result');
-const revealedEl = document.getElementById('revealed');
-const inputEl = document.getElementById('question');
-const whisperPanelEl = document.getElementById('whisper-panel');
-const whisperTextEl = document.getElementById('whisper-text');
-const branchPanelEl = document.getElementById('branch-panel');
-const branchesEl = document.getElementById('branches');
-const portraitPanelEl = document.getElementById('portrait-panel');
-const portraitEl = document.getElementById('portrait');
-const portraitCaptionEl = document.getElementById('portrait-caption');
+const $ = function (id) { return document.getElementById(id); };
+const transcriptEl = $('transcript');
+const scoreEl = $('score');
+const scoreBranchEl = $('score-branch');
+const progressEl = $('progress');
+const compareEl = $('score-compare');
+const completionSummaryEl = $('completion-summary');
+const completionTitleEl = $('completion-title');
+const completionBigEl = $('completion-big');
+const completionResultEl = $('completion-result');
+const completionCompareEl = $('completion-compare');
+const revealedEl = $('revealed');
+const revealedEmptyEl = $('revealed-empty');
+const inputEl = $('question');
+const sendEl = $('send');
+const composerEl = $('composer');
+const newSessionEl = $('new-session');
+const whisperPanelEl = $('whisper-panel');
+const whisperTextEl = $('whisper-text');
+const branchPanelEl = $('branch-panel');
+const branchesEl = $('branches');
+const portraitPanelEl = $('portrait-panel');
+const portraitEl = $('portrait');
+const portraitCaptionEl = $('portrait-caption');
+const sideDetailsEl = $('side-details');
 
 function activeTurns() {
   if (!branchCache[activeBranchId]) branchCache[activeBranchId] = [];
   return branchCache[activeBranchId];
 }
 
+function scrollToLatest() {
+  transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  const last = transcriptEl.lastElementChild;
+  // On narrow screens the page (not the transcript) scrolls.
+  if (last && transcriptEl.scrollHeight <= transcriptEl.clientHeight + 1) {
+    last.scrollIntoView({ block: 'nearest' });
+  }
+}
+
 function addMessage(who, text) {
   const div = document.createElement('div');
-  div.className = 'msg ' + (who === 'You' ? 'user' : 'character');
+  const kind = who === 'You' ? 'user' : (who === 'System' ? 'system' : 'character');
+  div.className = 'msg ' + kind;
+  if (kind === 'system') div.setAttribute('role', 'alert');
   const whoSpan = document.createElement('span');
   whoSpan.className = 'who';
   whoSpan.textContent = who + ': ';
   div.appendChild(whoSpan);
   div.appendChild(document.createTextNode(text));
   transcriptEl.appendChild(div);
+  return div;
+}
+
+// A small "retry from here" control under each of the user's questions.
+// It lives beside the bubble (not inside it) so message text stays clean.
+function addRewindButton(afterEl, questionIndex) {
+  if (!branchesSupported) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'msg-rewind';
+  button.textContent = '↺ Retry from here';
+  button.setAttribute('aria-label', 'Try again from question ' + (questionIndex + 1));
+  button.addEventListener('click', function () { rewindFrom(questionIndex); });
+  afterEl.insertAdjacentElement('afterend', button);
+}
+
+function branchLabel(branchId) {
+  const branch = branchTree.find(function (item) { return item.id === branchId; });
+  return branch ? branch.label : null;
+}
+
+function shortLabel(label) { return String(label).split(' (')[0]; }
+
+function scoreOf(branch) { return branch.score.revealed + '/' + branch.score.total; }
+
+function addForkMarker(meta) {
+  const parent = branchTree.find(function (item) { return item.id === meta.parent; });
+  const note = document.createElement('div');
+  note.className = 'fork-marker';
+  note.setAttribute('role', 'note');
+  const text = document.createElement('span');
+  text.textContent = '↺ Retrying from question ' + (meta.forkTurn + 1) +
+    (parent ? ' · ' + shortLabel(parent.label) + ' stays at ' + scoreOf(parent) : '');
+  note.appendChild(text);
+  transcriptEl.appendChild(note);
+}
+
+function renderTranscript() {
+  transcriptEl.setAttribute('aria-busy', 'true');
+  transcriptEl.innerHTML = '';
+  const turns = activeTurns();
+  const meta = branchMeta[activeBranchId];
+  let questionIndex = 0;
+  turns.forEach(function (turn, i) {
+    if (meta && meta.markerAt === i) addForkMarker(meta);
+    const div = addMessage(turn.who, turn.text);
+    if (turn.who === 'You') { addRewindButton(div, questionIndex); questionIndex++; }
+  });
+  if (meta && meta.markerAt >= turns.length) addForkMarker(meta);
+  transcriptEl.setAttribute('aria-busy', 'false');
+  scrollToLatest();
 }
 
 function renderRevealed(titles) {
@@ -127,6 +343,7 @@ function renderRevealed(titles) {
     li.textContent = title;
     revealedEl.appendChild(li);
   });
+  revealedEmptyEl.hidden = titles.length > 0;
 }
 
 function revealedTitles(branchId) {
@@ -148,18 +365,57 @@ function scoreText(branchId) {
   return scoreEl.textContent;
 }
 
+// Seven marks, filled only by the revealed count. A mark's tooltip names
+// a need only after it has been revealed; hidden marks stay anonymous.
+function renderMarks(revealed, total, titles) {
+  progressEl.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const mark = document.createElement('span');
+    mark.className = 'mark' + (i < revealed ? ' on' : '');
+    mark.title = i < revealed && titles[i] ? titles[i] : 'Not yet revealed';
+    progressEl.appendChild(mark);
+  }
+  progressEl.setAttribute('aria-label', revealed + ' of ' + total + ' scenario needs revealed');
+}
+
+function renderCompare() {
+  compareEl.innerHTML = '';
+  if (branchTree.length < 2) { compareEl.hidden = true; return; }
+  compareEl.hidden = false;
+  branchTree.slice(0, 4).forEach(function (branch, i) {
+    if (i > 0) compareEl.appendChild(document.createTextNode(' · '));
+    const item = document.createElement(branch.id === activeBranchId ? 'strong' : 'span');
+    item.textContent = shortLabel(branch.label) + ' ' + scoreOf(branch);
+    compareEl.appendChild(item);
+  });
+  if (branchTree.length > 4) compareEl.appendChild(document.createTextNode(' · +' + (branchTree.length - 4) + ' more'));
+}
+
 function renderScoreResult() {
-  const branch = branchTree.find(function (item) { return item.id === activeBranchId; });
-  const label = branch ? branch.label : 'Main';
+  const label = branchLabel(activeBranchId) || 'Main';
   scoreBranchEl.textContent = '— ' + label;
   const parts = scoreEl.textContent.split('/').map(Number);
+  const revealed = parts[0] || 0;
+  const total = parts[1] || 7;
   const complete = parts.length === 2 && parts[1] > 0 && parts[0] >= parts[1];
+  renderMarks(revealed, total, revealedTitles(activeBranchId));
+  renderCompare();
   completionSummaryEl.hidden = !complete;
+  composerEl.hidden = complete;
+  completionBigEl.textContent = complete ? scoreEl.textContent : '';
   completionResultEl.textContent = complete
     ? 'Final score: ' + scoreEl.textContent + ' — ' + label + '. ' +
       parts[0] + ' of ' + parts[1] + ' scenario needs revealed. ' +
       (branchTree.length || 1) + ' branch(es) tried in this session.'
     : '';
+  completionCompareEl.textContent = '';
+  const meta = branchMeta[activeBranchId];
+  const parent = complete && meta ? branchTree.find(function (item) { return item.id === meta.parent; }) : null;
+  if (parent) {
+    completionCompareEl.textContent = 'Before: ' + shortLabel(parent.label) + ' ' + scoreOf(parent) +
+      '  →  After: ' + shortLabel(label) + ' ' + scoreText(activeBranchId);
+  }
+  $('summary-rewind').hidden = !branchesSupported;
 }
 
 function hideWhisper() {
@@ -171,6 +427,16 @@ function showWhisper(text, turnIndex) {
   whisperTextEl.textContent = text;
   pendingRewindTurn = turnIndex;
   whisperPanelEl.hidden = false;
+  scrollToLatest();
+}
+
+function focusComposerOrSummary() {
+  if (!composerEl.hidden) {
+    inputEl.focus({ preventScroll: true });
+  } else {
+    completionTitleEl.setAttribute('tabindex', '-1');
+    completionTitleEl.focus({ preventScroll: true });
+  }
 }
 
 function renderTree() {
@@ -184,12 +450,36 @@ function renderTree() {
     const li = document.createElement('li');
     const button = document.createElement('button');
     button.type = 'button';
-    button.textContent = branch.label + ' — ' + branch.score.revealed +
-      '/' + branch.score.total;
-    if (branch.id === activeBranchId) button.className = 'current';
-    button.addEventListener('click', function () {
-      switchBranch(branch.id);
-    });
+    const line = document.createElement('span');
+    line.className = 'b-line';
+    const name = document.createElement('span');
+    name.className = 'b-label';
+    name.textContent = branch.label;
+    const score = document.createElement('span');
+    score.className = 'b-score';
+    score.textContent = scoreOf(branch);
+    line.appendChild(name);
+    line.appendChild(document.createTextNode(' — '));
+    line.appendChild(score);
+    const bar = document.createElement('span');
+    bar.className = 'b-bar';
+    bar.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < branch.score.total; i++) {
+      const seg = document.createElement('span');
+      if (i < branch.score.revealed) seg.className = 'on';
+      bar.appendChild(seg);
+    }
+    button.appendChild(line);
+    button.appendChild(bar);
+    if (branch.id === activeBranchId) {
+      button.className = 'current';
+      button.setAttribute('aria-current', 'true');
+    }
+    if (branchMeta[branch.id] && branchMeta[branch.id].fresh) {
+      button.classList.add('just-created');
+      branchMeta[branch.id].fresh = false;
+    }
+    button.addEventListener('click', function () { switchBranch(branch.id); });
     li.appendChild(button);
     branchesEl.appendChild(li);
   });
@@ -197,10 +487,7 @@ function renderTree() {
 
 function renderActiveBranch() {
   refreshPortrait();
-  transcriptEl.innerHTML = '';
-  activeTurns().forEach(function (turn) {
-    addMessage(turn.who, turn.text);
-  });
+  renderTranscript();
   renderRevealed(revealedTitles(activeBranchId));
   scoreEl.textContent = scoreText(activeBranchId);
   renderScoreResult();
@@ -209,9 +496,11 @@ function renderActiveBranch() {
 }
 
 function switchBranch(id) {
+  if (sending) return;
   if (!branchCache[id]) branchCache[id] = [];
   activeBranchId = id;
   renderActiveBranch();
+  focusComposerOrSummary();
 }
 
 async function refreshPortrait() {
@@ -256,13 +545,16 @@ async function createSession() {
     activeBranchId = 'main';
     branchCache = { main: [] };
     branchTree = [];
+    branchMeta = {};
     branchesSupported = true;
+    characterName = data.character.name || 'Alex';
     branchCache.main.push({
-      who: data.character.name,
+      who: characterName,
       text: data.character.opening_line,
       newlyRevealed: []
     });
     scoreEl.textContent = data.score.revealed + '/' + data.score.total;
+    disarmNewSession();
     await refreshTree();
     renderActiveBranch();
     inputEl.focus();
@@ -277,60 +569,91 @@ function userTurnCount() {
   }).length;
 }
 
-async function sendMessage() {
-  const text = inputEl.value.trim();
-  if (!text || !sessionId) return;
-  inputEl.value = '';
-  hideWhisper();
-  activeTurns().push({ who: 'You', text: text, newlyRevealed: [] });
-  addMessage('You', text);
-  const body = { text: text };
-  if (branchesSupported) body.branch_id = activeBranchId;
-  let data;
-  try {
-    const res = await fetch('/sessions/' + sessionId + '/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) {
-      addMessage('System', 'Something went wrong (' + res.status + '). Try a new session.');
-      activeTurns().pop();
-      return;
-    }
-    data = await res.json();
-  } catch (err) {
-    addMessage('System', 'Request failed. Is the server running?');
-    activeTurns().pop();
-    return;
-  }
-  activeTurns().push({
-    who: 'Teammate',
-    text: data.reply,
-    newlyRevealed: data.newly_revealed || []
+function hasProgress() {
+  return Object.keys(branchCache).some(function (id) {
+    return branchCache[id].some(function (turn) { return turn.who === 'You'; });
   });
-  addMessage('Teammate', data.reply);
-  if (data.branch_id) activeBranchId = data.branch_id;
-  await refreshTree();
-  renderRevealed(revealedTitles(activeBranchId));
-  if (branchesSupported) {
-    scoreEl.textContent = scoreText(activeBranchId);
-  } else if (data.score_display) {
-    scoreEl.textContent = data.score_display;
-  }
-  renderTree();
-  refreshPortrait();
-  const wasComplete = !completionSummaryEl.hidden;
-  renderScoreResult();
-  if (!wasComplete && !completionSummaryEl.hidden) {
-    completionSummaryEl.scrollIntoView({ block: 'nearest' });
-  }
-  if (data.coach_whisper) showWhisper(data.coach_whisper, userTurnCount() - 1);
 }
 
-async function rewindToTurn() {
-  if (!sessionId || pendingRewindTurn === null) return;
-  const fromTurn = pendingRewindTurn;
+function setSending(value) {
+  sending = value;
+  sendEl.disabled = value;
+  sendEl.textContent = value ? 'Sending…' : 'Send';
+  transcriptEl.setAttribute('aria-busy', value ? 'true' : 'false');
+}
+
+// A failed send keeps the user's words: the question goes back in the box
+// and the transcript drops the bubble that never got an answer.
+function failSend(text, message) {
+  activeTurns().pop();
+  renderTranscript();
+  addMessage('System', message);
+  inputEl.value = text;
+  scrollToLatest();
+}
+
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text || !sessionId || sending) return;
+  setSending(true);
+  try {
+    inputEl.value = '';
+    hideWhisper();
+    activeTurns().push({ who: 'You', text: text, newlyRevealed: [] });
+    const userDiv = addMessage('You', text);
+    scrollToLatest();
+    const body = { text: text };
+    if (branchesSupported) body.branch_id = activeBranchId;
+    let data;
+    try {
+      const res = await fetch('/sessions/' + sessionId + '/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        failSend(text, 'Something went wrong (' + res.status + '). Your question is back in the box; try again or start a new session.');
+        return;
+      }
+      data = await res.json();
+    } catch (err) {
+      failSend(text, 'Request failed. Is the server running? Your question is back in the box.');
+      return;
+    }
+    addRewindButton(userDiv, userTurnCount() - 1);
+    activeTurns().push({
+      who: characterName,
+      text: data.reply,
+      newlyRevealed: data.newly_revealed || []
+    });
+    addMessage(characterName, data.reply);
+    if (data.branch_id) activeBranchId = data.branch_id;
+    await refreshTree();
+    renderRevealed(revealedTitles(activeBranchId));
+    if (branchesSupported) {
+      scoreEl.textContent = scoreText(activeBranchId);
+    } else if (data.score_display) {
+      scoreEl.textContent = data.score_display;
+    }
+    renderTree();
+    refreshPortrait();
+    const wasComplete = !completionSummaryEl.hidden;
+    renderScoreResult();
+    if (!wasComplete && !completionSummaryEl.hidden) {
+      completionSummaryEl.scrollIntoView({ block: 'nearest' });
+    }
+    scrollToLatest();
+    if (data.coach_whisper) showWhisper(data.coach_whisper, userTurnCount() - 1);
+  } finally {
+    setSending(false);
+    if (!composerEl.hidden) inputEl.focus({ preventScroll: true });
+  }
+}
+
+// Fork a new branch from the user's question number `turnIndex` (0-based):
+// the new branch keeps everything before that question.
+async function rewindFrom(turnIndex) {
+  if (!sessionId || !branchesSupported || sending || turnIndex === null) return;
   const fromBranch = activeBranchId;
   hideWhisper();
   let data;
@@ -338,7 +661,7 @@ async function rewindToTurn() {
     const res = await fetch('/sessions/' + sessionId + '/branches', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from_turn: fromTurn, from_branch_id: fromBranch })
+      body: JSON.stringify({ from_turn: turnIndex, from_branch_id: fromBranch })
     });
     if (!res.ok) {
       addMessage('System', 'Rewind failed (' + res.status + ').');
@@ -352,18 +675,60 @@ async function rewindToTurn() {
   // Cache layout is [opening, user, reply, user, reply, ...]: one
   // opening line plus two entries per server turn.
   const newId = data.branch.id;
-  branchCache[newId] = branchCache[fromBranch].slice(0, fromTurn * 2 + 1);
+  const keep = turnIndex * 2 + 1;
+  branchCache[newId] = branchCache[fromBranch].slice(0, keep);
+  branchMeta[newId] = { parent: fromBranch, forkTurn: turnIndex, markerAt: keep, fresh: true };
   activeBranchId = newId;
   await refreshTree();
   renderActiveBranch();
+  focusComposerOrSummary();
 }
 
-document.getElementById('send').addEventListener('click', sendMessage);
-document.getElementById('new-session').addEventListener('click', createSession);
-document.getElementById('summary-new-session').addEventListener('click', createSession);
-document.getElementById('rewind').addEventListener('click', rewindToTurn);
+function rewindFromCoach() {
+  if (pendingRewindTurn === null) return;
+  rewindFrom(pendingRewindTurn);
+}
+
+function disarmNewSession() {
+  clearTimeout(armTimer);
+  newSessionEl.classList.remove('armed');
+  newSessionEl.textContent = 'New session';
+}
+
+// Clearing a session wipes every branch, so ask once (inline, no dialog)
+// when there is something to lose.
+function onNewSession() {
+  if (hasProgress() && completionSummaryEl.hidden && !newSessionEl.classList.contains('armed')) {
+    newSessionEl.classList.add('armed');
+    newSessionEl.textContent = 'Click again to clear everything';
+    armTimer = setTimeout(disarmNewSession, 4000);
+    return;
+  }
+  createSession();
+}
+
+function focusFirstRewind() {
+  const first = transcriptEl.querySelector('.msg-rewind');
+  if (first) {
+    first.scrollIntoView({ block: 'center' });
+    first.focus();
+  }
+}
+
+sendEl.addEventListener('click', sendMessage);
+newSessionEl.addEventListener('click', onNewSession);
+$('summary-new-session').addEventListener('click', createSession);
+$('summary-rewind').addEventListener('click', focusFirstRewind);
+$('rewind').addEventListener('click', rewindFromCoach);
 inputEl.addEventListener('keydown', function (e) {
-  if (e.key === 'Enter') sendMessage();
+  if (e.key === 'Enter' && !e.isComposing) sendMessage();
+});
+
+// Sidebar: always open on wide screens, collapsed by default on phones.
+const wideQuery = window.matchMedia('(min-width: 900px)');
+sideDetailsEl.open = wideQuery.matches;
+wideQuery.addEventListener('change', function () {
+  if (wideQuery.matches) sideDetailsEl.open = true;
 });
 
 // On load, create a session automatically.
