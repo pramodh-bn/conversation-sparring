@@ -21,6 +21,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -49,6 +50,9 @@ def get_scenario():
 
 @asynccontextmanager
 async def lifespan(app):
+    # Only this server's working directory; never search other worktrees.
+    # Shell configuration wins. Missing .env is a normal scripted startup.
+    load_dotenv(dotenv_path=Path.cwd() / ".env", override=False)
     # Load the scenario at startup; endpoints also lazy-load it via
     # get_scenario() so in-process TestClient use works without a
     # lifespan context manager.

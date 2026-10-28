@@ -8,6 +8,15 @@ through inheritance) with a recorder. No test makes a network call.
 from types import SimpleNamespace
 
 import pytest
+from unittest.mock import Mock
+
+
+@pytest.fixture(autouse=True)
+def mock_startup_dotenv(monkeypatch):
+    """Never read developer .env files, including in TestClient lifespans."""
+    loader = Mock(return_value=False)
+    monkeypatch.setattr("app.server.load_dotenv", loader)
+    return loader
 
 
 class OpenAIRecorder:
