@@ -105,11 +105,29 @@ The server speaks to Muse Spark instead of the scripted
 character/coach when BOTH variables are set (any other combination
 stays scripted):
 
-```bash
-cd ~/workspace/hackathon-conversation-sparring
-META_MODEL_API_KEY=<key> META_MODEL_API_BASE=<official base URL> \
-  .venv/bin/python -m uvicorn app.server:app --port 8000
+Put `META_MODEL_API_KEY` and `META_MODEL_API_BASE` in the gitignored
+`.env` in the directory where you start the server (normally this repo root).
+Start by copying the tracked `.env.example` (`Copy-Item .env.example .env`
+in PowerShell, or `cp .env.example .env` elsewhere), then fill in the blanks.
+The template contains no credentials; leaving them blank keeps scripted mode.
+The server loads that file once during startup. Shell environment variables
+take precedence; exporting them is optional. A missing `.env` is fine and
+keeps scripted mode when the shell has no live configuration.
+
+On Windows, use Python 3.12 (the Python 3.15 `jiter` binary was blocked by
+Application Control on the development laptop):
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn app.server:app --port 8000
 ```
+
+On other platforms, start `.venv/bin/python -m uvicorn app.server:app --port 8000`
+from the repo root. Each worktree needs its own `.env`: startup reads only the
+current working directory's file, not parent folders or the main checkout.
+Restart the server after changing `.env`. Library clients and the scripted
+demo do not auto-load it. Pytest mocks the startup loader and never reads it.
 
 Optional: `META_MODEL_API_MODEL` (default `muse-spark-1.3`). The base
 URL has no default — take it from Meta's official docs. Prefer a
