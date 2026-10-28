@@ -8,7 +8,10 @@
   body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #222; }
   h1 { font-size: 1.4rem; }
   h2 { font-size: 1.1rem; margin-bottom: 0.25rem; }
-  #score-line { font-weight: bold; margin: 0.5rem 0; }
+  #score-line { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 2px solid #1a5276; padding: 0.75rem 0; font-weight: bold; margin: 0.5rem 0; }
+  #score-branch { font-weight: normal; }
+  #completion-summary { border: 2px solid #1a5276; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+  #completion-summary[hidden] { display: none; }
   #transcript { border: 1px solid #ccc; border-radius: 6px; padding: 1rem; min-height: 200px; margin-bottom: 1rem; }
   .msg { margin-bottom: 0.75rem; }
   .msg .who { font-weight: bold; }
@@ -38,7 +41,7 @@
 <h1>Conversation Sparring</h1>
 <p>Ask questions. Open questions go deeper than yes/no ones — try asking
 about feelings, worries, and what matters, not just facts.</p>
-<div id="score-line">Score: <span id="score">0/7</span></div>
+<div id="score-line" role="status" aria-live="polite" aria-atomic="true">Score: <span id="score">0/7</span> <span id="score-branch"></span></div>
 <div id="portrait-panel" hidden>
   <h2>Portrait</h2>
   <img id="portrait" alt="Character portrait">
@@ -53,6 +56,12 @@ about feelings, worries, and what matters, not just facts.</p>
   <span class="who">Coach: </span><span id="whisper-text"></span>
   <button id="rewind" type="button">Rewind to this turn</button>
 </div>
+<section id="completion-summary" aria-labelledby="completion-title" hidden>
+  <h2 id="completion-title">All scenario needs revealed</h2>
+  <p id="completion-result" role="status" aria-live="polite"></p>
+  <p>Compare your branches above, or start a new practice session.</p>
+  <button id="summary-new-session" type="button">Start a new session</button>
+</section>
 <div id="composer">
   <input id="question" type="text" placeholder="Ask your teammate a question…" autocomplete="off">
   <button id="send" type="button">Send</button>
@@ -82,6 +91,9 @@ let pendingRewindTurn = null;
 
 const transcriptEl = document.getElementById('transcript');
 const scoreEl = document.getElementById('score');
+const scoreBranchEl = document.getElementById('score-branch');
+const completionSummaryEl = document.getElementById('completion-summary');
+const completionResultEl = document.getElementById('completion-result');
 const revealedEl = document.getElementById('revealed');
 const inputEl = document.getElementById('question');
 const whisperPanelEl = document.getElementById('whisper-panel');
@@ -136,6 +148,20 @@ function scoreText(branchId) {
   return scoreEl.textContent;
 }
 
+function renderScoreResult() {
+  const branch = branchTree.find(function (item) { return item.id === activeBranchId; });
+  const label = branch ? branch.label : 'Main';
+  scoreBranchEl.textContent = '— ' + label;
+  const parts = scoreEl.textContent.split('/').map(Number);
+  const complete = parts.length === 2 && parts[1] > 0 && parts[0] >= parts[1];
+  completionSummaryEl.hidden = !complete;
+  completionResultEl.textContent = complete
+    ? 'Final score: ' + scoreEl.textContent + ' — ' + label + '. ' +
+      parts[0] + ' of ' + parts[1] + ' scenario needs revealed. ' +
+      (branchTree.length || 1) + ' branch(es) tried in this session.'
+    : '';
+}
+
 function hideWhisper() {
   whisperPanelEl.hidden = true;
   pendingRewindTurn = null;
@@ -177,6 +203,7 @@ function renderActiveBranch() {
   });
   renderRevealed(revealedTitles(activeBranchId));
   scoreEl.textContent = scoreText(activeBranchId);
+  renderScoreResult();
   renderTree();
   hideWhisper();
 }
@@ -293,6 +320,11 @@ async function sendMessage() {
   }
   renderTree();
   refreshPortrait();
+  const wasComplete = !completionSummaryEl.hidden;
+  renderScoreResult();
+  if (!wasComplete && !completionSummaryEl.hidden) {
+    completionSummaryEl.scrollIntoView({ block: 'nearest' });
+  }
   if (data.coach_whisper) showWhisper(data.coach_whisper, userTurnCount() - 1);
 }
 
@@ -328,6 +360,7 @@ async function rewindToTurn() {
 
 document.getElementById('send').addEventListener('click', sendMessage);
 document.getElementById('new-session').addEventListener('click', createSession);
+document.getElementById('summary-new-session').addEventListener('click', createSession);
 document.getElementById('rewind').addEventListener('click', rewindToTurn);
 inputEl.addEventListener('keydown', function (e) {
   if (e.key === 'Enter') sendMessage();
