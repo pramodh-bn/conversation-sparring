@@ -7,6 +7,10 @@ those are Days 5+ work.
 
 The contract this build implements is `SPEC.md` in this directory.
 
+**On Windows 11?** The Setup, test, demo and web UI commands further down use
+Linux/macOS paths (`.venv/bin/python`). Use the
+[Windows 11 (PowerShell)](#windows-11-powershell) section instead.
+
 ## What it is
 
 Talk to a character with a hidden need; ask meaning-level questions to
@@ -17,7 +21,90 @@ open only to meaning-level questions, so closed-question-only runs
 score low and good-question runs score high. Scoring is deterministic
 (revealed / 7) — no LLM anywhere in scoring.
 
+## Windows 11 (PowerShell)
+
+Use this section instead of the Linux/macOS commands below. Checked in Windows
+PowerShell 5.1 on Windows 11 Pro with Python 3.12.10; every command is run from
+the repo folder.
+
+**1. Prerequisites**
+
+```powershell
+winget install --id Python.Python.3.12 -e --scope user   # Python 3.12, no admin needed
+winget install --id Git.Git -e                           # only if `git --version` fails
+py -0                                                    # lists installed Pythons: 3.12 must appear
+```
+
+Open a new terminal after installing so `PATH` updates. Use Python 3.12 (the
+version CI runs); see Troubleshooting for why not 3.15.
+
+**2. Get the code and create the virtual environment**
+
+```powershell
+git clone https://github.com/pramodh-bn/conversation-sparring.git
+cd conversation-sparring
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+You do not need to "activate" the environment: every command below calls its
+Python directly, which also avoids PowerShell's script-execution policy. If a
+`.venv` already exists that was built with a different Python, recreate it with
+`py -3.12 -m venv --clear .venv` and install again (a plain `venv` over an old
+one keeps the old compiled packages, which then fail to import).
+
+**3. Run the tests and the scripted demo** (no API key needed)
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe scripts\demo_run.py
+```
+
+All tests should pass and the demo should end with `DEMO OK`.
+
+**4. Run the app**
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.server:app --port 8000
+```
+
+Open http://127.0.0.1:8000/ and press Ctrl+C in that window to stop. With no
+`.env` the character and coach are scripted. To check it from a second
+PowerShell window:
+
+```powershell
+$s = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/sessions
+$s.character.name, $s.score
+```
+
+**5. Use the live model** (optional)
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
+
+Fill in `META_MODEL_API_KEY` and `META_MODEL_API_BASE` (both are required; the
+base URL comes from Meta's official docs). `.env` is gitignored, is read from
+the folder you start the server in, and needs a server restart after edits.
+Leaving the values blank keeps scripted mode. Keep keys out of chat, commits
+and screenshots. Details: "Run with the live model (CS-6)" below.
+
+**Troubleshooting**
+
+| Symptom | What to do |
+|---|---|
+| `py -3.12` says no such interpreter | Install Python 3.12 (step 1), then open a new terminal. |
+| `DLL load failed while importing jiter ... An Application Control policy has blocked this file` | That Python build's compiled files are blocked (seen with Python 3.15 on the development laptop). Use Python 3.12. |
+| `ImportError: cannot import name ... from 'pydantic_core'` or another compiled package after changing Python versions | The `.venv` is stale. Recreate it with `py -3.12 -m venv --clear .venv`, then install again. |
+| Port 8000 is already in use | Start on another port, for example `--port 8001`. `Get-NetTCPConnection -LocalPort 8000 -State Listen` shows what is listening. |
+| `fatal: detected dubious ownership in repository` | Git refuses folders owned by another Windows user. Run the `git config --global --add safe.directory <full folder path>` command that git prints. |
+| `UnicodeEncodeError` when output is redirected or piped | Rare. Set `$env:PYTHONUTF8 = "1"` in that window and run again. |
+| `warning: LF will be replaced by CRLF` from git | Harmless line-ending conversion on Windows. |
+
 ## Setup
+
+*Linux/macOS commands. On Windows 11 use the section above.*
 
 A virtualenv already exists in this directory (`.venv`) with everything
 installed. To recreate it from scratch:
@@ -128,17 +215,10 @@ The server loads that file once during startup. Shell environment variables
 take precedence; exporting them is optional. A missing `.env` is fine and
 keeps scripted mode when the shell has no live configuration.
 
-On Windows, use Python 3.12 (the Python 3.15 `jiter` binary was blocked by
-Application Control on the development laptop):
-
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn app.server:app --port 8000
-```
-
-On other platforms, start `.venv/bin/python -m uvicorn app.server:app --port 8000`
-from the repo root. Each worktree needs its own `.env`: startup reads only the
+On Windows 11 follow the [Windows 11 (PowerShell)](#windows-11-powershell)
+section above (use Python 3.12; the Python 3.15 `jiter` binary was blocked by
+Application Control on the development laptop). On other platforms, start
+`.venv/bin/python -m uvicorn app.server:app --port 8000` from the repo root. Each worktree needs its own `.env`: startup reads only the
 current working directory's file, not parent folders or the main checkout.
 Restart the server after changing `.env`. Library clients and the scripted
 demo do not auto-load it. Pytest mocks the startup loader and never reads it.
